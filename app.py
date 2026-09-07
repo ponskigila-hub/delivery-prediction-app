@@ -14,77 +14,52 @@ from sklearn.svm import SVR
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 
 # =====================================
-# PAGE CONFIG & CUSTOM CSS
+# PAGE CONFIG & CSS
 # =====================================
 st.set_page_config(
-    page_title='United Logistics | Delivery Prediction',
-    page_icon='🚛',
+    page_title='Delivery Time Prediction',
+    page_icon='📦',
     layout='wide',
     initial_sidebar_state='expanded'
 )
 
-def inject_custom_css():
-    st.markdown("""
-    <style>
-        /* Corporate Logistics Theme */
-        :root {
-            --primary-blue: #003366;
-            --accent-orange: #FF6200;
-            --bg-light: #F4F6F9;
-        }
-        
-        /* Headers and text */
-        h1, h2, h3 {
-            color: var(--primary-blue) !important;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        
-        /* Primary Buttons (Simulating Call-to-Action) */
-        .stButton>button {
-            background-color: var(--accent-orange);
-            color: white;
-            border-radius: 6px;
-            border: none;
-            padding: 0.5rem 2rem;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            width: 100%;
-        }
-        .stButton>button:hover {
-            background-color: #e55800;
-            color: white;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-
-        /* Metric Cards */
-        div[data-testid="stMetricValue"] {
-            color: var(--primary-blue);
-            font-size: 2.5rem !important;
-            font-weight: 700;
-        }
-        div[data-testid="metric-container"] {
-            background-color: white;
-            border-top: 4px solid var(--accent-orange);
-            padding: 1rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-
-        /* Sidebar Styling */
-        section[data-testid="stSidebar"] {
-            background-color: var(--primary-blue);
-        }
-        section[data-testid="stSidebar"] * {
-            color: white !important;
-        }
-        
-        /* Hide Streamlit Branding */
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-    </style>
-    """, unsafe_allow_html=True)
-
-inject_custom_css()
+# Responsive CSS that works in both Light and Dark mode
+st.markdown("""
+<style>
+    /* Styled Metric Cards */
+    div[data-testid="metric-container"] {
+        border: 1px solid rgba(128, 128, 128, 0.2);
+        border-radius: 8px;
+        padding: 15px 20px;
+        background: linear-gradient(90deg, rgba(28, 131, 225, 0.1) 0%, transparent 100%);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        transition: transform 0.2s ease;
+    }
+    div[data-testid="metric-container"]:hover {
+        transform: translateY(-2px);
+    }
+    
+    /* Prominent Prediction Output */
+    .prediction-box {
+        text-align: center;
+        padding: 2rem;
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(28, 131, 225, 0.2), rgba(28, 131, 225, 0.05));
+        border: 1px solid rgba(28, 131, 225, 0.3);
+        margin-top: 1rem;
+    }
+    .prediction-value {
+        font-size: 3.5rem;
+        font-weight: 800;
+        color: #1C83E1; /* Streamlit Primary Blue */
+        margin: 0;
+    }
+    
+    /* Clean up default Streamlit elements */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+</style>
+""", unsafe_allow_html=True)
 
 # =====================================
 # LOAD & PREPROCESS DATA
@@ -94,12 +69,12 @@ def load_data():
     try:
         return pd.read_csv('olist_orders_dataset.csv')
     except FileNotFoundError:
-        # Fallback dummy data if file is missing so the UI still renders
-        dates = pd.date_range(start='2023-01-01', periods=100)
+        # Fallback for demo purposes if CSV is missing
+        dates = pd.date_range(start='2023-01-01', periods=200)
         return pd.DataFrame({
             'order_purchase_timestamp': dates,
-            'order_delivered_customer_date': dates + pd.to_timedelta(np.random.randint(2, 15, 100), unit='d'),
-            'order_estimated_delivery_date': dates + pd.to_timedelta(np.random.randint(5, 20, 100), unit='d')
+            'order_delivered_customer_date': dates + pd.to_timedelta(np.random.randint(2, 15, 200), unit='d'),
+            'order_estimated_delivery_date': dates + pd.to_timedelta(np.random.randint(5, 20, 200), unit='d')
         })
 
 @st.cache_data
@@ -127,186 +102,210 @@ features = ['purchase_hour', 'purchase_day', 'purchase_month', 'estimated_days']
 target = 'delivery_days'
 
 # =====================================
-# SIDEBAR NAVIGATION
+# SIDEBAR MENU
 # =====================================
 with st.sidebar:
-    st.markdown("## 🚛 United Logistics")
+    st.title('📦 Navigation')
     st.markdown("---")
     menu = st.radio(
-        "NETWORK OPERATIONS",
+        'Go to:',
         [
-            '🏠 Dashboard',
-            '📊 Market Analysis',
-            '⚙️ Pipeline Config',
-            '🤖 Model Deployment',
-            '📈 Diagnostics',
-            '🚀 Get Delivery Quote'
+            'Home',
+            'Exploratory Data Analysis',
+            'Data Preprocessing',
+            'Train Your Model',
+            'Model Evaluation',
+            'Prediction Demo'
         ]
     )
-    st.markdown("---")
-    st.caption("System Status: **Online** 🟢")
 
 # =====================================
-# ROUTING & VIEWS
+# HOME
 # =====================================
+if menu == 'Home':
+    st.title('Delivery Time Prediction App')
+    st.markdown("Predict delivery duration based on order information and historical logistics data.")
+    st.markdown("<br>", unsafe_allow_html=True)
 
-if menu == '🏠 Dashboard':
-    st.title('Global Fulfillment Dashboard')
-    st.markdown("Monitor network efficiency and delivery lifecycles in real-time.")
-    
-    # KPIs
     col1, col2, col3 = st.columns(3)
-    col1.metric('Total Shipments Processed', f"{len(df):,}")
-    col2.metric('Avg. Transit Time (Days)', round(df[target].mean(), 1))
-    col3.metric('Max Transit Time (Days)', int(df[target].max()))
-    
-    st.markdown("### Recent Network Activity")
-    st.dataframe(df.head(15), use_container_width=True)
+    col1.metric('Total Orders', f"{len(df):,}")
+    col2.metric('Average Delivery', f"{round(df[target].mean(), 1)} Days")
+    col3.metric('Max Delivery Time', f"{int(df[target].max())} Days")
 
-elif menu == '📊 Market Analysis':
+    st.markdown("### 📋 Dataset Preview")
+    st.dataframe(df.head(10), use_container_width=True)
+
+# =====================================
+# EDA
+# =====================================
+elif menu == 'Exploratory Data Analysis':
     st.title('Exploratory Data Analysis')
-    st.markdown("Investigate operational bottlenecks and delivery trends.")
     
-    tab1, tab2, tab3 = st.tabs(["Data Overview", "Distributions", "Correlations"])
+    tab1, tab2, tab3 = st.tabs(["Data Profiling", "Feature Distributions", "Correlations"])
     
     with tab1:
-        st.subheader("Data Types & Missing Values")
         colA, colB = st.columns(2)
         with colA:
-            st.write(df.dtypes)
+            st.subheader("Data Types")
+            st.dataframe(df.dtypes.astype(str), use_container_width=True)
         with colB:
-            st.write(df.isnull().sum())
+            st.subheader("Missing Values")
+            st.dataframe(df.isnull().sum(), use_container_width=True)
             
+        st.subheader("Statistical Summary")
+        st.dataframe(df.describe(), use_container_width=True)
+
     with tab2:
-        st.subheader("Feature Distributions")
-        selected_feature = st.selectbox('Analyze Feature', features, key='hist_feat')
-        fig, ax = plt.subplots(figsize=(8, 4))
-        sns.histplot(df[selected_feature], kde=True, color='#003366', ax=ax)
-        st.pyplot(fig)
+        selected_feature = st.selectbox('Select Feature to Analyze', features)
+        col1, col2 = st.columns(2)
         
+        with col1:
+            st.markdown(f"**Histogram: {selected_feature}**")
+            fig, ax = plt.subplots(figsize=(6, 4))
+            sns.histplot(df[selected_feature], kde=True, ax=ax, color='#1C83E1')
+            st.pyplot(fig)
+            
+        with col2:
+            st.markdown(f"**Boxplot: {selected_feature}**")
+            fig, ax = plt.subplots(figsize=(6, 4))
+            sns.boxplot(x=df[selected_feature], ax=ax, color='#1C83E1')
+            st.pyplot(fig)
+
     with tab3:
-        st.subheader("Network Feature Correlation")
-        fig, ax = plt.subplots(figsize=(8, 5))
-        sns.heatmap(df[features + [target]].corr(), annot=True, cmap='Oranges', ax=ax)
+        st.markdown("**Feature Correlation Heatmap**")
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.heatmap(df[features + [target]].corr(), annot=True, cmap='Blues', ax=ax, fmt=".2f")
         st.pyplot(fig)
 
-elif menu == '⚙️ Pipeline Config':
+# =====================================
+# PREPROCESSING
+# =====================================
+elif menu == 'Data Preprocessing':
     st.title('Data Preprocessing')
-    st.markdown("Configure the data pipeline before model training.")
-    
+    st.markdown("Configure hyperparameters for your data pipeline.")
+
     with st.form("preprocessing_form"):
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         with col1:
-            test_size = st.slider('Holdout Set Size (Test %)', 0.1, 0.5, 0.2)
+            test_size = st.slider('Test Size %', 0.1, 0.5, 0.2, 0.05)
         with col2:
-            scaler_option = st.selectbox('Scaling Algorithm', ['StandardScaler', 'MinMaxScaler'])
+            random_state = st.number_input('Random State', 1, 100, 42)
+        with col3:
+            scaler_option = st.selectbox('Scaler', ['StandardScaler', 'MinMaxScaler'])
             
-        random_state = st.number_input('Random Seed', value=42)
-        submit_prep = st.form_submit_button("Initialize Pipeline")
-        
-    if submit_prep:
-        X, y = df[features], df[target]
+        submit = st.form_submit_button("Run Preprocessing Pipeline", use_container_width=True)
+
+    if submit:
+        X = df[features]
+        y = df[target]
+
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state)
-        
+
         scaler = StandardScaler() if scaler_option == 'StandardScaler' else MinMaxScaler()
         X_train_scaled = scaler.fit_transform(X_train)
-        
+        X_test_scaled = scaler.transform(X_test)
+
         with open('scaler.pkl', 'wb') as file:
             pickle.dump(scaler, file)
-            
-        st.success('✅ Pipeline initialized and scaler serialized successfully.')
-        colA, colB = st.columns(2)
-        colA.info(f"Training Matrix: {X_train_scaled.shape}")
-        colB.info(f"Target Vector: {y_train.shape}")
 
-elif menu == '🤖 Model Deployment':
-    st.title('Model Training Hub')
-    st.markdown("Select and deploy machine learning architectures for ETA prediction.")
-    
+        st.success('✅ Pipeline executed successfully!')
+        colA, colB = st.columns(2)
+        colA.info(f"**Training Set:** {X_train_scaled.shape[0]} rows")
+        colB.info(f"**Testing Set:** {X_test_scaled.shape[0]} rows")
+
+# =====================================
+# TRAIN MODEL
+# =====================================
+elif menu == 'Train Your Model':
+    st.title('Train Your Model')
+
     model_option = st.selectbox(
-        'Select Architecture',
+        'Select Algorithm',
         ['Linear Regression (Baseline)', 'Random Forest Regressor (Proposed)', 'SVR (Alternative)']
     )
-    
-    if st.button('Deploy Model', use_container_width=True):
-        with st.spinner('Compiling and training model...'):
-            X_train, X_test, y_train, y_test = train_test_split(df[features], df[target], test_size=0.2, random_state=42)
-            
+
+    if st.button('Initialize & Train Model', type="primary", use_container_width=True):
+        with st.spinner('Training in progress...'):
+            X = df[features]
+            y = df[target]
+
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
             scaler = StandardScaler()
             X_train = scaler.fit_transform(X_train)
-            
+
             if 'Linear Regression' in model_option:
                 model = LinearRegression()
             elif 'Random Forest' in model_option:
-                model = RandomForestRegressor(n_estimators=50) # limited for speed in demo
+                model = RandomForestRegressor(n_estimators=50) # Reduced for demo speed
             else:
                 model = SVR()
-                
+
             model.fit(X_train, y_train)
-            
+
             with open('MainModel.pkl', 'wb') as file:
                 pickle.dump(model, file)
-                
-            st.success(f'✅ {model_option.split(" ")[0]} deployed successfully to production!')
 
-elif menu == '📈 Diagnostics':
-    st.title('Performance Diagnostics')
-    
+            st.success(f'✅ {model_option.split("(")[0].strip()} trained and saved to disk!')
+
+# =====================================
+# MODEL EVALUATION
+# =====================================
+elif menu == 'Model Evaluation':
+    st.title('Model Evaluation')
+
     if os.path.exists('MainModel.pkl') and os.path.exists('scaler.pkl'):
-        X_train, X_test, y_train, y_test = train_test_split(df[features], df[target], test_size=0.2, random_state=42)
-        
+        X = df[features]
+        y = df[target]
+
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
         with open('scaler.pkl', 'rb') as file:
             scaler = pickle.load(file)
         with open('MainModel.pkl', 'rb') as file:
             model = pickle.load(file)
-            
+
         X_test_scaled = scaler.transform(X_test)
         y_pred = model.predict(X_test_scaled)
-        
+
+        st.markdown("### Performance Metrics")
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("R² Score", round(r2_score(y_test, y_pred), 3))
-        col2.metric("MAE", round(mean_absolute_error(y_test, y_pred), 2))
-        col3.metric("MSE", round(mean_squared_error(y_test, y_pred), 2))
-        col4.metric("RMSE", round(np.sqrt(mean_squared_error(y_test, y_pred)), 2))
+        col1.metric('R² Score', round(r2_score(y_test, y_pred), 3))
+        col2.metric('MAE', round(mean_absolute_error(y_test, y_pred), 2))
+        col3.metric('MSE', round(mean_squared_error(y_test, y_pred), 2))
+        col4.metric('RMSE', round(np.sqrt(mean_squared_error(y_test, y_pred)), 2))
         
-        # Actual vs Predicted Plot
-        st.markdown("### Actual vs. Predicted Delivery Days")
+        st.markdown("### Actual vs Predicted")
         fig, ax = plt.subplots(figsize=(10, 4))
-        sns.scatterplot(x=y_test, y=y_pred, alpha=0.5, color='#003366', ax=ax)
+        sns.scatterplot(x=y_test, y=y_pred, alpha=0.5, color='#1C83E1', ax=ax)
         ax.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
-        ax.set_xlabel("Actual Days")
-        ax.set_ylabel("Predicted Days")
+        ax.set_xlabel("Actual Delivery Days")
+        ax.set_ylabel("Predicted Delivery Days")
         st.pyplot(fig)
     else:
-        st.warning("⚠️ No compiled model found. Please run the Pipeline and Training sequences first.")
+        st.warning("⚠️ Please run the Preprocessing and Training steps first.")
 
-elif menu == '🚀 Get Delivery Quote':
-    st.title('Delivery Time Estimator')
-    st.markdown("Generate AI-powered delivery estimates for your logistics planning.")
-    
-    # Styled like a "Tracking / Quote" widget on a logistics site
-    with st.container():
-        st.markdown("""
-            <div style='background-color: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-left: 5px solid #FF6200;'>
-                <h3 style='margin-top: 0; color: #003366;'>Calculate Estimated Time of Arrival (ETA)</h3>
-            </div>
-            <br>
-        """, unsafe_allow_html=True)
+# =====================================
+# PREDICTION DEMO
+# =====================================
+elif menu == 'Prediction Demo':
+    st.title('Prediction Demo')
+    st.markdown("Input new order parameters to predict the delivery duration.")
+
+    with st.form("prediction_form"):
+        col1, col2 = st.columns(2)
         
-        with st.form("quote_form"):
-            col1, col2 = st.columns(2)
+        with col1:
+            purchase_hour = st.slider('Purchase Hour (0-23)', 0, 23, 12)
+            purchase_day = st.number_input('Purchase Day (1-31)', 1, 31, 15)
             
-            with col1:
-                purchase_hour = st.slider('Time of Order (Hour)', 0, 23, 12, help="24-hour format")
-                purchase_day = st.number_input('Day of Month', 1, 31, 15)
-                
-            with col2:
-                purchase_month = st.selectbox('Month of Order', list(range(1, 13)), index=5)
-                estimated_days = st.number_input('Carrier Estimated Days', 1, 60, 10, help="Initial carrier estimate")
+        with col2:
+            purchase_month = st.selectbox('Purchase Month', list(range(1, 13)), index=5)
+            estimated_days = st.number_input('Estimated Delivery Days', 1, 60, 10)
 
-            submit_quote = st.form_submit_button("Calculate Accurate ETA", use_container_width=True)
+        submit_prediction = st.form_submit_button('Predict Delivery Time', type="primary", use_container_width=True)
 
-    if submit_quote:
+    if submit_prediction:
         if os.path.exists('MainModel.pkl') and os.path.exists('scaler.pkl'):
             with open('MainModel.pkl', 'rb') as file:
                 model = pickle.load(file)
@@ -318,11 +317,11 @@ elif menu == '🚀 Get Delivery Quote':
             prediction = model.predict(input_scaled)[0]
 
             st.markdown(f"""
-                <div style='text-align: center; background-color: #e6f3ff; padding: 2rem; border-radius: 8px; margin-top: 2rem; border: 1px solid #b3d9ff;'>
-                    <h2 style='color: #003366; margin: 0;'>Predicted Transit Time</h2>
-                    <h1 style='color: #FF6200; font-size: 4rem; margin: 0;'>{round(prediction, 1)} <span style='font-size: 2rem; color: #003366;'>Days</span></h1>
+                <div class="prediction-box">
+                    <h3>Estimated Transit Time</h3>
+                    <p class="prediction-value">{round(prediction, 1)} <span style="font-size: 1.5rem; color: #555;">Days</span></p>
                 </div>
             """, unsafe_allow_html=True)
             st.balloons()
         else:
-            st.error("⚠️ Predictive system offline. Please configure pipeline and train models first.")
+            st.error("⚠️ Predictive system offline. Please train a model first.")
