@@ -25,24 +25,22 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    /* ----- Global ----- */
-    .main > div {
-        padding-top: 2rem;
-    }
-    .block-container {
-        padding-bottom: 3rem;
-    }
+    /* ----- Reset & Base ----- */
+    .main > div { padding-top: 2rem; }
+    .block-container { padding-bottom: 3rem; }
 
     /* ----- Metric Cards ----- */
     .custom-metric-card {
+        width: 100%;
+        box-sizing: border-box;
         background: linear-gradient(135deg, rgba(28, 131, 225, 0.12) 0%, rgba(255, 255, 255, 0.02) 100%);
         border: 1px solid rgba(28, 131, 225, 0.3);
-        padding: 1.5rem;
+        padding: 1.5rem 1rem;
         border-radius: 12px;
         box-shadow: 0 4px 10px rgba(0,0,0,0.2);
         text-align: center;
         transition: transform 0.2s ease, border-color 0.2s ease;
-        margin-bottom: 1rem;
+        margin-bottom: 0.5rem;
         backdrop-filter: blur(4px);
     }
     .custom-metric-card:hover {
@@ -62,13 +60,15 @@ st.markdown("""
         font-weight: 800;
         color: #4299E1;
         margin: 0;
+        line-height: 1.2;
     }
 
     /* ----- Prediction Card ----- */
     .prediction-card {
+        width: 100%;
         background: linear-gradient(135deg, rgba(46, 204, 113, 0.15) 0%, rgba(39, 174, 96, 0.05) 100%);
         border: 1px solid rgba(46, 204, 113, 0.4);
-        padding: 3rem;
+        padding: 3rem 2rem;
         border-radius: 16px;
         text-align: center;
         margin-top: 2rem;
@@ -82,16 +82,20 @@ st.markdown("""
         margin-bottom: 1rem;
     }
     .prediction-value {
-        font-size: 4.5rem;
+        font-size: 4rem;
         font-weight: 900;
         color: #2ECC71;
         margin: 0;
         line-height: 1;
     }
+    .prediction-unit {
+        font-size: 1.5rem;
+        color: #A0AEC0;
+    }
 
     /* ----- Section Headers ----- */
     .section-header {
-        font-size: 1.8rem;
+        font-size: 2rem;
         font-weight: 700;
         color: #EDF2F7;
         margin-bottom: 1.5rem;
@@ -106,7 +110,7 @@ st.markdown("""
         margin-bottom: 1rem;
     }
 
-    /* ----- Form & Buttons ----- */
+    /* ----- Forms & Buttons ----- */
     .stButton button {
         width: 100%;
         border-radius: 8px;
@@ -124,7 +128,7 @@ st.markdown("""
         border: 1px solid rgba(255,255,255,0.05);
     }
 
-    /* ----- Dataframe ----- */
+    /* ----- Dataframes ----- */
     .dataframe-container {
         background: rgba(255,255,255,0.02);
         border-radius: 12px;
@@ -141,21 +145,24 @@ st.markdown("""
 # =====================================
 # UI HELPER FUNCTIONS
 # =====================================
-def render_card(title, value, unit="", color_override=None, border_color=None):
-    """Render a custom metric card with optional colour overrides."""
-    color_style = f"color: {color_override};" if color_override else ""
-    border_style = ""
-    if border_color:
-        border_style = f"border-color: {border_color};"
-    if color_override:
-        # also adjust background gradient based on colour
-        bg_grad = f"background: linear-gradient(135deg, {color_override}15 0%, transparent 100%);"
-        border_style += bg_grad
+def render_card(title, value, unit="", accent_color=None):
+    """
+    Render a metric card with optional accent colour.
+    accent_color: hex colour (e.g. '#2ECC71') – changes border & text colour.
+    """
+    if accent_color:
+        color_style = f"color: {accent_color};"
+        border_style = f"border-color: {accent_color};"
+        bg_grad = f"background: linear-gradient(135deg, {accent_color}15 0%, transparent 100%);"
+    else:
+        color_style = ""
+        border_style = ""
+        bg_grad = ""
 
     html = f"""
-    <div class="custom-metric-card" style="{border_style}">
+    <div class="custom-metric-card" style="{border_style} {bg_grad}">
         <div class="metric-title" style="{color_style}">{title}</div>
-        <div class="metric-value" style="{color_style}">{value} <span style="font-size: 1rem; color: #A0AEC0;">{unit}</span></div>
+        <div class="metric-value" style="{color_style}">{value} <span style="font-size:1rem;color:#A0AEC0;">{unit}</span></div>
     </div>
     """
     st.markdown(html, unsafe_allow_html=True)
@@ -165,6 +172,16 @@ def render_section_header(text):
 
 def render_subsection_header(text):
     st.markdown(f'<div class="subsection-header">{text}</div>', unsafe_allow_html=True)
+
+def render_metric_row(cards):
+    """
+    Helper to display a row of metric cards.
+    cards: list of dicts with keys: title, value, unit (optional), accent_color (optional)
+    """
+    cols = st.columns(len(cards))
+    for col, card in zip(cols, cards):
+        with col:
+            render_card(**card)
 
 # =====================================
 # LOAD & PREPROCESS DATA
@@ -222,10 +239,11 @@ if menu == 'Home':
     render_section_header('📦 Delivery Time Prediction App')
     st.markdown("Predict delivery duration based on order information and historical logistics data.")
 
-    col1, col2, col3 = st.columns(3)
-    with col1: render_card("Total Orders", f"{len(df):,}")
-    with col2: render_card("Average Delivery", round(df[target].mean(), 1), "Days")
-    with col3: render_card("Max Delivery Time", int(df[target].max()), "Days")
+    render_metric_row([
+        {"title": "Total Orders", "value": f"{len(df):,}"},
+        {"title": "Average Delivery", "value": round(df[target].mean(), 1), "unit": "Days"},
+        {"title": "Max Delivery Time", "value": int(df[target].max()), "unit": "Days"}
+    ])
 
     render_subsection_header("📋 Dataset Preview")
     with st.container():
@@ -235,15 +253,17 @@ if menu == 'Home':
 
 elif menu == 'Exploratory Data Analysis':
     render_section_header('🔍 Exploratory Data Analysis')
+
+    # Top metrics
+    render_metric_row([
+        {"title": "Rows", "value": f"{df.shape[0]:,}"},
+        {"title": "Columns", "value": f"{df.shape[1]}"},
+        {"title": "Missing Values", "value": f"{df.isnull().sum().sum():,}"}
+    ])
+
     tab1, tab2, tab3 = st.tabs(["Data Profiling", "Feature Distributions", "Correlations"])
     
     with tab1:
-        render_subsection_header("Data Overview")
-        colA, colB, colC = st.columns(3)
-        with colA: render_card("Rows", f"{df.shape[0]:,}")
-        with colB: render_card("Columns", f"{df.shape[1]}")
-        with colC: render_card("Missing Values", f"{df.isnull().sum().sum():,}")
-
         col1, col2 = st.columns(2)
         with col1:
             render_subsection_header("Data Types")
@@ -303,10 +323,11 @@ elif menu == 'Data Preprocessing':
         with open('scaler.pkl', 'wb') as file: pickle.dump(scaler, file)
 
         st.success('✅ Pipeline executed successfully!')
-        colA, colB, colC = st.columns(3)
-        with colA: render_card("Training Set Size", X_train_scaled.shape[0], "Rows", border_color="rgba(46, 204, 113, 0.4)")
-        with colB: render_card("Test Set Size", X_test_scaled.shape[0], "Rows", border_color="rgba(46, 204, 113, 0.4)")
-        with colC: render_card("Features", X_train_scaled.shape[1], "Columns", border_color="rgba(46, 204, 113, 0.4)")
+        render_metric_row([
+            {"title": "Training Set Size", "value": X_train_scaled.shape[0], "unit": "Rows", "accent_color": "#2ECC71"},
+            {"title": "Test Set Size", "value": X_test_scaled.shape[0], "unit": "Rows", "accent_color": "#2ECC71"},
+            {"title": "Features", "value": X_train_scaled.shape[1], "unit": "Columns", "accent_color": "#2ECC71"}
+        ])
         st.markdown("---")
         st.markdown("**Scaler saved:** `scaler.pkl` ready for model training.")
 
@@ -335,9 +356,10 @@ elif menu == 'Train Your Model':
             with open('MainModel.pkl', 'wb') as file: pickle.dump(model, file)
             
             st.success(f"✅ {model_name} trained and saved as `MainModel.pkl`")
-            render_card("Status", "🟢 Online", f"{model_name} Deployed", color_override="#2ECC71", border_color="rgba(46, 204, 113, 0.4)")
+            render_metric_row([
+                {"title": "Status", "value": "🟢 Online", "unit": model_name + " Deployed", "accent_color": "#2ECC71"}
+            ])
 
-            # Show model parameters summary
             with st.expander("Model Details"):
                 if hasattr(model, 'get_params'):
                     st.json(model.get_params())
@@ -358,11 +380,12 @@ elif menu == 'Model Evaluation':
         y_pred = model.predict(X_test_scaled)
 
         render_subsection_header("Performance Metrics")
-        col1, col2, col3, col4 = st.columns(4)
-        with col1: render_card("R² Score", round(r2_score(y_test, y_pred), 3), border_color="rgba(28, 131, 225, 0.4)")
-        with col2: render_card("MAE", round(mean_absolute_error(y_test, y_pred), 2), border_color="rgba(28, 131, 225, 0.4)")
-        with col3: render_card("MSE", round(mean_squared_error(y_test, y_pred), 2), border_color="rgba(28, 131, 225, 0.4)")
-        with col4: render_card("RMSE", round(np.sqrt(mean_squared_error(y_test, y_pred)), 2), border_color="rgba(28, 131, 225, 0.4)")
+        render_metric_row([
+            {"title": "R² Score", "value": round(r2_score(y_test, y_pred), 3)},
+            {"title": "MAE", "value": round(mean_absolute_error(y_test, y_pred), 2)},
+            {"title": "MSE", "value": round(mean_squared_error(y_test, y_pred), 2)},
+            {"title": "RMSE", "value": round(np.sqrt(mean_squared_error(y_test, y_pred)), 2)}
+        ])
 
         render_subsection_header("Actual vs Predicted")
         fig, ax = plt.subplots(figsize=(10, 4))
@@ -401,7 +424,7 @@ elif menu == 'Prediction Demo':
             st.markdown(f"""
                 <div class="prediction-card">
                     <div class="prediction-title">Estimated Transit Time</div>
-                    <p class="prediction-value">{round(prediction, 1)} <span style="font-size: 1.5rem; color: #A0AEC0;">Days</span></p>
+                    <p class="prediction-value">{round(prediction, 1)} <span class="prediction-unit">Days</span></p>
                 </div>
             """, unsafe_allow_html=True)
             st.balloons()
