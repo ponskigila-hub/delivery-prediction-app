@@ -23,10 +23,8 @@ st.set_page_config(
     initial_sidebar_state='expanded'
 )
 
-# Global CSS for consistent styling across all pages
 st.markdown("""
 <style>
-    /* Custom Metric Cards */
     .custom-metric-card {
         background: linear-gradient(135deg, rgba(28, 131, 225, 0.15) 0%, rgba(255, 255, 255, 0.02) 100%);
         border: 1px solid rgba(28, 131, 225, 0.3);
@@ -55,8 +53,6 @@ st.markdown("""
         color: #4299E1;
         margin: 0;
     }
-    
-    /* Prediction Output Card */
     .prediction-card {
         background: linear-gradient(135deg, rgba(46, 204, 113, 0.15) 0%, rgba(39, 174, 96, 0.05) 100%);
         border: 1px solid rgba(46, 204, 113, 0.4);
@@ -80,16 +76,26 @@ st.markdown("""
         margin: 0;
         line-height: 1;
     }
-    .prediction-unit {
-        font-size: 1.5rem;
-        color: #A0AEC0;
-        font-weight: 500;
-    }
-
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
+
+# =====================================
+# UI HELPER FUNCTIONS
+# =====================================
+def render_card(title, value, unit="", color_override=None):
+    """Helper function to reliably render custom HTML metric cards in Streamlit"""
+    color_style = f"color: {color_override};" if color_override else ""
+    border_style = f"border-color: rgba(46, 204, 113, 0.4); background: linear-gradient(135deg, rgba(46, 204, 113, 0.1) 0%, transparent 100%);" if color_override else ""
+    
+    html = f"""
+    <div class="custom-metric-card" style="{border_style}">
+        <div class="metric-title" style="{color_style}">{title}</div>
+        <div class="metric-value">{value} <span style="font-size: 1rem; color: #A0AEC0;">{unit}</span></div>
+    </div>
+    """
+    st.markdown(html, unsafe_allow_html=True)
 
 # =====================================
 # LOAD & PREPROCESS DATA
@@ -121,7 +127,6 @@ def preprocess(df):
 
     df['delivery_days'] = (df['order_delivered_customer_date'] - df['order_purchase_timestamp']).dt.days
     df['estimated_days'] = (df['order_estimated_delivery_date'] - df['order_purchase_timestamp']).dt.days
-
     return df
 
 df = load_data()
@@ -138,60 +143,26 @@ with st.sidebar:
     st.markdown("---")
     menu = st.radio(
         'Go to:',
-        [
-            'Home',
-            'Exploratory Data Analysis',
-            'Data Preprocessing',
-            'Train Your Model',
-            'Model Evaluation',
-            'Prediction Demo'
-        ]
+        ['Home', 'Exploratory Data Analysis', 'Data Preprocessing', 'Train Your Model', 'Model Evaluation', 'Prediction Demo']
     )
 
 # =====================================
-# HOME
+# ROUTING
 # =====================================
 if menu == 'Home':
     st.title('Delivery Time Prediction App')
-    st.markdown("Predict delivery duration based on order information and historical logistics data.")
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("Predict delivery duration based on order information and historical logistics data.<br>", unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown(f"""
-        <div class="custom-metric-card">
-            <div class="metric-title">Total Orders</div>
-            <div class="metric-value">{len(df):,}</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    with col2:
-        st.markdown(f"""
-        <div class="custom-metric-card">
-            <div class="metric-title">Average Delivery</div>
-            <div class="metric-value">{round(df[target].mean(), 1)} Days</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    with col3:
-        st.markdown(f"""
-        <div class="custom-metric-card">
-            <div class="metric-title">Max Delivery Time</div>
-            <div class="metric-value">{int(df[target].max())} Days</div>
-        </div>
-        """, unsafe_allow_html=True)
+    with col1: render_card("Total Orders", f"{len(df):,}")
+    with col2: render_card("Average Delivery", round(df[target].mean(), 1), "Days")
+    with col3: render_card("Max Delivery Time", int(df[target].max()), "Days")
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("### 📋 Dataset Preview")
+    st.markdown("<br>### 📋 Dataset Preview", unsafe_allow_html=True)
     st.dataframe(df.head(10), use_container_width=True)
 
-# =====================================
-# EDA
-# =====================================
 elif menu == 'Exploratory Data Analysis':
     st.title('Exploratory Data Analysis')
-    
     tab1, tab2, tab3 = st.tabs(["Data Profiling", "Feature Distributions", "Correlations"])
     
     with tab1:
@@ -202,14 +173,12 @@ elif menu == 'Exploratory Data Analysis':
         with colB:
             st.subheader("Missing Values")
             st.dataframe(df.isnull().sum(), use_container_width=True)
-            
         st.subheader("Statistical Summary")
         st.dataframe(df.describe(), use_container_width=True)
 
     with tab2:
         selected_feature = st.selectbox('Select Feature to Analyze', features)
         col1, col2 = st.columns(2)
-        
         with col1:
             st.markdown(f"**Histogram: {selected_feature}**")
             fig, ax = plt.subplots(figsize=(6, 4))
@@ -217,7 +186,6 @@ elif menu == 'Exploratory Data Analysis':
             fig.patch.set_alpha(0.0)
             ax.patch.set_alpha(0.0)
             st.pyplot(fig)
-            
         with col2:
             st.markdown(f"**Boxplot: {selected_feature}**")
             fig, ax = plt.subplots(figsize=(6, 4))
@@ -234,151 +202,71 @@ elif menu == 'Exploratory Data Analysis':
         ax.patch.set_alpha(0.0)
         st.pyplot(fig)
 
-# =====================================
-# PREPROCESSING
-# =====================================
 elif menu == 'Data Preprocessing':
     st.title('Data Preprocessing')
     st.markdown("Configure hyperparameters for your data pipeline.")
 
     with st.form("preprocessing_form"):
         col1, col2, col3 = st.columns(3)
-        with col1:
-            test_size = st.slider('Test Size %', 0.1, 0.5, 0.2, 0.05)
-        with col2:
-            random_state = st.number_input('Random State', 1, 100, 42)
-        with col3:
-            scaler_option = st.selectbox('Scaler', ['StandardScaler', 'MinMaxScaler'])
-            
+        with col1: test_size = st.slider('Test Size %', 0.1, 0.5, 0.2, 0.05)
+        with col2: random_state = st.number_input('Random State', 1, 100, 42)
+        with col3: scaler_option = st.selectbox('Scaler', ['StandardScaler', 'MinMaxScaler'])
         submit = st.form_submit_button("Run Preprocessing Pipeline", use_container_width=True)
 
     if submit:
-        X = df[features]
-        y = df[target]
-
+        X, y = df[features], df[target]
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state)
-
         scaler = StandardScaler() if scaler_option == 'StandardScaler' else MinMaxScaler()
+        
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
 
-        with open('scaler.pkl', 'wb') as file:
-            pickle.dump(scaler, file)
+        with open('scaler.pkl', 'wb') as file: pickle.dump(scaler, file)
 
         st.success('✅ Pipeline executed successfully!')
-        
-        st.markdown("<br>", unsafe_allow_html=True)
         colA, colB = st.columns(2)
-        with colA:
-            st.markdown(f"""
-            <div class="custom-metric-card">
-                <div class="metric-title">Training Matrix Size</div>
-                <div class="metric-value">{X_train_scaled.shape[0]} <span style="font-size: 1rem; color: #A0AEC0;">Rows</span></div>
-            </div>
-            """, unsafe_allow_html=True)
-        with colB:
-            st.markdown(f"""
-            <div class="custom-metric-card">
-                <div class="metric-title">Testing Matrix Size</div>
-                <div class="metric-value">{X_test_scaled.shape[0]} <span style="font-size: 1rem; color: #A0AEC0;">Rows</span></div>
-            </div>
-            """, unsafe_allow_html=True)
+        with colA: render_card("Training Matrix Size", X_train_scaled.shape[0], "Rows")
+        with colB: render_card("Testing Matrix Size", X_test_scaled.shape[0], "Rows")
 
-# =====================================
-# TRAIN MODEL
-# =====================================
 elif menu == 'Train Your Model':
     st.title('Train Your Model')
-
-    model_option = st.selectbox(
-        'Select Algorithm',
-        ['Linear Regression (Baseline)', 'Random Forest Regressor (Proposed)', 'SVR (Alternative)']
-    )
+    model_option = st.selectbox('Select Algorithm', ['Linear Regression (Baseline)', 'Random Forest Regressor (Proposed)', 'SVR (Alternative)'])
 
     if st.button('Initialize & Train Model', type="primary", use_container_width=True):
         with st.spinner('Training in progress...'):
-            X = df[features]
-            y = df[target]
-
+            X, y = df[features], df[target]
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
             scaler = StandardScaler()
             X_train = scaler.fit_transform(X_train)
 
-            if 'Linear Regression' in model_option:
-                model = LinearRegression()
-            elif 'Random Forest' in model_option:
-                model = RandomForestRegressor(n_estimators=50) 
-            else:
-                model = SVR()
+            if 'Linear Regression' in model_option: model = LinearRegression()
+            elif 'Random Forest' in model_option: model = RandomForestRegressor(n_estimators=50) 
+            else: model = SVR()
 
             model.fit(X_train, y_train)
+            with open('MainModel.pkl', 'wb') as file: pickle.dump(model, file)
+            
+            render_card("Status: Online", f"✅ {model_option.split('(')[0].strip()} Deployed", color_override="#2ECC71")
 
-            with open('MainModel.pkl', 'wb') as file:
-                pickle.dump(model, file)
-
-            # Replacing default success with a custom status card
-            st.markdown(f"""
-            <div class="custom-metric-card" style="border-color: rgba(46, 204, 113, 0.4); background: linear-gradient(135deg, rgba(46, 204, 113, 0.1) 0%, transparent 100%);">
-                <div class="metric-title" style="color: #2ECC71;">Status: Online</div>
-                <div class="metric-value" style="font-size: 1.5rem;">✅ {model_option.split("(")[0].strip()} Deployed</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-# =====================================
-# MODEL EVALUATION
-# =====================================
 elif menu == 'Model Evaluation':
     st.title('Model Evaluation')
 
     if os.path.exists('MainModel.pkl') and os.path.exists('scaler.pkl'):
-        X = df[features]
-        y = df[target]
-
+        X, y = df[features], df[target]
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-        with open('scaler.pkl', 'rb') as file:
-            scaler = pickle.load(file)
-        with open('MainModel.pkl', 'rb') as file:
-            model = pickle.load(file)
+        with open('scaler.pkl', 'rb') as file: scaler = pickle.load(file)
+        with open('MainModel.pkl', 'rb') as file: model = pickle.load(file)
 
         X_test_scaled = scaler.transform(X_test)
         y_pred = model.predict(X_test_scaled)
 
         st.markdown("### Performance Metrics")
         col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.markdown(f"""
-            <div class="custom-metric-card">
-                <div class="metric-title">R² Score</div>
-                <div class="metric-value">{round(r2_score(y_test, y_pred), 3)}</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-        with col2:
-            st.markdown(f"""
-            <div class="custom-metric-card">
-                <div class="metric-title">MAE</div>
-                <div class="metric-value">{round(mean_absolute_error(y_test, y_pred), 2)}</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-        with col3:
-            st.markdown(f"""
-            <div class="custom-metric-card">
-                <div class="metric-title">MSE</div>
-                <div class="metric-value">{round(mean_squared_error(y_test, y_pred), 2)}</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-        with col4:
-            st.markdown(f"""
-            <div class="custom-metric-card">
-                <div class="metric-title">RMSE</div>
-                <div class="metric-value">{round(np.sqrt(mean_squared_error(y_test, y_pred)), 2)}</div>
-            </div>
-            """, unsafe_allow_html=True)
+        with col1: render_card("R² Score", round(r2_score(y_test, y_pred), 3))
+        with col2: render_card("MAE", round(mean_absolute_error(y_test, y_pred), 2))
+        with col3: render_card("MSE", round(mean_squared_error(y_test, y_pred), 2))
+        with col4: render_card("RMSE", round(np.sqrt(mean_squared_error(y_test, y_pred)), 2))
         
         st.markdown("<br>### Actual vs Predicted", unsafe_allow_html=True)
         fig, ax = plt.subplots(figsize=(10, 4))
@@ -386,48 +274,38 @@ elif menu == 'Model Evaluation':
         ax.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
         ax.set_xlabel("Actual Delivery Days")
         ax.set_ylabel("Predicted Delivery Days")
-        
         fig.patch.set_alpha(0.0)
         ax.patch.set_alpha(0.0)
         st.pyplot(fig)
     else:
         st.warning("⚠️ Please run the Preprocessing and Training steps first.")
 
-# =====================================
-# PREDICTION DEMO
-# =====================================
 elif menu == 'Prediction Demo':
     st.title('Prediction Demo')
     st.markdown("Input new order parameters to predict the delivery duration.")
 
     with st.form("prediction_form"):
         col1, col2 = st.columns(2)
-        
         with col1:
             purchase_hour = st.slider('Purchase Hour (0-23)', 0, 23, 12)
             purchase_day = st.number_input('Purchase Day (1-31)', 1, 31, 15)
-            
         with col2:
             purchase_month = st.selectbox('Purchase Month', list(range(1, 13)), index=5)
             estimated_days = st.number_input('Carrier Estimated Days', 1, 60, 10)
-
         submit_prediction = st.form_submit_button('Generate AI Prediction', type="primary", use_container_width=True)
 
     if submit_prediction:
         if os.path.exists('MainModel.pkl') and os.path.exists('scaler.pkl'):
-            with open('MainModel.pkl', 'rb') as file:
-                model = pickle.load(file)
-            with open('scaler.pkl', 'rb') as file:
-                scaler = pickle.load(file)
+            with open('MainModel.pkl', 'rb') as file: model = pickle.load(file)
+            with open('scaler.pkl', 'rb') as file: scaler = pickle.load(file)
 
             input_data = np.array([[purchase_hour, purchase_day, purchase_month, estimated_days]])
-            input_scaled = scaler.transform(input_data)
-            prediction = model.predict(input_scaled)[0]
+            prediction = model.predict(scaler.transform(input_data))[0]
 
             st.markdown(f"""
                 <div class="prediction-card">
                     <div class="prediction-title">Estimated Transit Time</div>
-                    <p class="prediction-value">{round(prediction, 1)} <span class="prediction-unit">Days</span></p>
+                    <p class="prediction-value">{round(prediction, 1)} <span style="font-size: 1.5rem; color: #A0AEC0;">Days</span></p>
                 </div>
             """, unsafe_allow_html=True)
             st.balloons()
