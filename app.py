@@ -14,7 +14,7 @@ from sklearn.svm import SVR
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 
 # =====================================
-# PAGE CONFIG & CSS
+# PAGE CONFIG & GLOBAL CSS
 # =====================================
 st.set_page_config(
     page_title='Delivery Time Prediction',
@@ -23,39 +23,69 @@ st.set_page_config(
     initial_sidebar_state='expanded'
 )
 
-# Responsive CSS that works in both Light and Dark mode
+# Global CSS for consistent styling across all pages
 st.markdown("""
 <style>
-    /* Styled Metric Cards */
-    div[data-testid="metric-container"] {
-        border: 1px solid rgba(128, 128, 128, 0.2);
-        border-radius: 8px;
-        padding: 15px 20px;
-        background: linear-gradient(90deg, rgba(28, 131, 225, 0.1) 0%, transparent 100%);
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        transition: transform 0.2s ease;
-    }
-    div[data-testid="metric-container"]:hover {
-        transform: translateY(-2px);
-    }
-    
-    /* Prominent Prediction Output */
-    .prediction-box {
-        text-align: center;
-        padding: 2rem;
-        border-radius: 12px;
-        background: linear-gradient(135deg, rgba(28, 131, 225, 0.2), rgba(28, 131, 225, 0.05));
+    /* Custom Metric Cards */
+    .custom-metric-card {
+        background: linear-gradient(135deg, rgba(28, 131, 225, 0.15) 0%, rgba(255, 255, 255, 0.02) 100%);
         border: 1px solid rgba(28, 131, 225, 0.3);
-        margin-top: 1rem;
+        padding: 1.5rem;
+        border-radius: 12px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        text-align: center;
+        transition: transform 0.2s ease;
+        margin-bottom: 1rem;
     }
-    .prediction-value {
-        font-size: 3.5rem;
+    .custom-metric-card:hover {
+        transform: translateY(-5px);
+        border: 1px solid rgba(28, 131, 225, 0.6);
+    }
+    .metric-title {
+        font-size: 0.9rem;
+        color: #A0AEC0;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    .metric-value {
+        font-size: 2rem;
         font-weight: 800;
-        color: #1C83E1; /* Streamlit Primary Blue */
+        color: #4299E1;
         margin: 0;
     }
     
-    /* Clean up default Streamlit elements */
+    /* Prediction Output Card */
+    .prediction-card {
+        background: linear-gradient(135deg, rgba(46, 204, 113, 0.15) 0%, rgba(39, 174, 96, 0.05) 100%);
+        border: 1px solid rgba(46, 204, 113, 0.4);
+        padding: 3rem;
+        border-radius: 16px;
+        text-align: center;
+        margin-top: 2rem;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+    }
+    .prediction-title {
+        color: #A0AEC0;
+        font-size: 1.2rem;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        margin-bottom: 1rem;
+    }
+    .prediction-value {
+        font-size: 4.5rem;
+        font-weight: 900;
+        color: #2ECC71;
+        margin: 0;
+        line-height: 1;
+    }
+    .prediction-unit {
+        font-size: 1.5rem;
+        color: #A0AEC0;
+        font-weight: 500;
+    }
+
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 </style>
@@ -69,7 +99,6 @@ def load_data():
     try:
         return pd.read_csv('olist_orders_dataset.csv')
     except FileNotFoundError:
-        # Fallback for demo purposes if CSV is missing
         dates = pd.date_range(start='2023-01-01', periods=200)
         return pd.DataFrame({
             'order_purchase_timestamp': dates,
@@ -127,40 +156,6 @@ if menu == 'Home':
     st.markdown("Predict delivery duration based on order information and historical logistics data.")
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Injecting Custom HTML/CSS specifically for the Metric Cards
-    st.markdown("""
-    <style>
-    .custom-metric-card {
-        background: linear-gradient(135deg, rgba(28, 131, 225, 0.15) 0%, rgba(255, 255, 255, 0.02) 100%);
-        border: 1px solid rgba(28, 131, 225, 0.3);
-        padding: 1.5rem;
-        border-radius: 12px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-        text-align: center;
-        transition: transform 0.2s ease;
-    }
-    .custom-metric-card:hover {
-        transform: translateY(-5px);
-        border: 1px solid rgba(28, 131, 225, 0.6);
-    }
-    .metric-title {
-        font-size: 1rem;
-        color: #A0AEC0; /* Light gray for dark mode readability */
-        margin-bottom: 0.5rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-    .metric-value {
-        font-size: 2.2rem;
-        font-weight: 800;
-        color: #4299E1; /* Bright blue */
-        margin: 0;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # Render Custom Metric Cards
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -187,7 +182,7 @@ if menu == 'Home':
         </div>
         """, unsafe_allow_html=True)
 
-    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("### 📋 Dataset Preview")
     st.dataframe(df.head(10), use_container_width=True)
 
@@ -293,7 +288,7 @@ elif menu == 'Train Your Model':
             if 'Linear Regression' in model_option:
                 model = LinearRegression()
             elif 'Random Forest' in model_option:
-                model = RandomForestRegressor(n_estimators=50) # Reduced for demo speed
+                model = RandomForestRegressor(n_estimators=50) 
             else:
                 model = SVR()
 
@@ -326,17 +321,49 @@ elif menu == 'Model Evaluation':
 
         st.markdown("### Performance Metrics")
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric('R² Score', round(r2_score(y_test, y_pred), 3))
-        col2.metric('MAE', round(mean_absolute_error(y_test, y_pred), 2))
-        col3.metric('MSE', round(mean_squared_error(y_test, y_pred), 2))
-        col4.metric('RMSE', round(np.sqrt(mean_squared_error(y_test, y_pred)), 2))
         
-        st.markdown("### Actual vs Predicted")
+        with col1:
+            st.markdown(f"""
+            <div class="custom-metric-card">
+                <div class="metric-title">R² Score</div>
+                <div class="metric-value">{round(r2_score(y_test, y_pred), 3)}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with col2:
+            st.markdown(f"""
+            <div class="custom-metric-card">
+                <div class="metric-title">MAE</div>
+                <div class="metric-value">{round(mean_absolute_error(y_test, y_pred), 2)}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with col3:
+            st.markdown(f"""
+            <div class="custom-metric-card">
+                <div class="metric-title">MSE</div>
+                <div class="metric-value">{round(mean_squared_error(y_test, y_pred), 2)}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with col4:
+            st.markdown(f"""
+            <div class="custom-metric-card">
+                <div class="metric-title">RMSE</div>
+                <div class="metric-value">{round(np.sqrt(mean_squared_error(y_test, y_pred)), 2)}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown("<br>### Actual vs Predicted", unsafe_allow_html=True)
         fig, ax = plt.subplots(figsize=(10, 4))
         sns.scatterplot(x=y_test, y=y_pred, alpha=0.5, color='#1C83E1', ax=ax)
         ax.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
         ax.set_xlabel("Actual Delivery Days")
         ax.set_ylabel("Predicted Delivery Days")
+        
+        # Transparent background for charts to match dark mode better
+        fig.patch.set_alpha(0.0)
+        ax.patch.set_alpha(0.0)
         st.pyplot(fig)
     else:
         st.warning("⚠️ Please run the Preprocessing and Training steps first.")
@@ -357,9 +384,9 @@ elif menu == 'Prediction Demo':
             
         with col2:
             purchase_month = st.selectbox('Purchase Month', list(range(1, 13)), index=5)
-            estimated_days = st.number_input('Estimated Delivery Days', 1, 60, 10)
+            estimated_days = st.number_input('Carrier Estimated Days', 1, 60, 10)
 
-        submit_prediction = st.form_submit_button('Predict Delivery Time', type="primary", use_container_width=True)
+        submit_prediction = st.form_submit_button('Generate AI Prediction', type="primary", use_container_width=True)
 
     if submit_prediction:
         if os.path.exists('MainModel.pkl') and os.path.exists('scaler.pkl'):
@@ -373,9 +400,9 @@ elif menu == 'Prediction Demo':
             prediction = model.predict(input_scaled)[0]
 
             st.markdown(f"""
-                <div class="prediction-box">
-                    <h3>Estimated Transit Time</h3>
-                    <p class="prediction-value">{round(prediction, 1)} <span style="font-size: 1.5rem; color: #555;">Days</span></p>
+                <div class="prediction-card">
+                    <div class="prediction-title">Estimated Transit Time</div>
+                    <p class="prediction-value">{round(prediction, 1)} <span class="prediction-unit">Days</span></p>
                 </div>
             """, unsafe_allow_html=True)
             st.balloons()
