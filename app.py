@@ -214,18 +214,24 @@ elif menu == 'Exploratory Data Analysis':
             st.markdown(f"**Histogram: {selected_feature}**")
             fig, ax = plt.subplots(figsize=(6, 4))
             sns.histplot(df[selected_feature], kde=True, ax=ax, color='#1C83E1')
+            fig.patch.set_alpha(0.0)
+            ax.patch.set_alpha(0.0)
             st.pyplot(fig)
             
         with col2:
             st.markdown(f"**Boxplot: {selected_feature}**")
             fig, ax = plt.subplots(figsize=(6, 4))
             sns.boxplot(x=df[selected_feature], ax=ax, color='#1C83E1')
+            fig.patch.set_alpha(0.0)
+            ax.patch.set_alpha(0.0)
             st.pyplot(fig)
 
     with tab3:
         st.markdown("**Feature Correlation Heatmap**")
         fig, ax = plt.subplots(figsize=(10, 6))
         sns.heatmap(df[features + [target]].corr(), annot=True, cmap='Blues', ax=ax, fmt=".2f")
+        fig.patch.set_alpha(0.0)
+        ax.patch.set_alpha(0.0)
         st.pyplot(fig)
 
 # =====================================
@@ -260,9 +266,23 @@ elif menu == 'Data Preprocessing':
             pickle.dump(scaler, file)
 
         st.success('✅ Pipeline executed successfully!')
+        
+        st.markdown("<br>", unsafe_allow_html=True)
         colA, colB = st.columns(2)
-        colA.info(f"**Training Set:** {X_train_scaled.shape[0]} rows")
-        colB.info(f"**Testing Set:** {X_test_scaled.shape[0]} rows")
+        with colA:
+            st.markdown(f"""
+            <div class="custom-metric-card">
+                <div class="metric-title">Training Matrix Size</div>
+                <div class="metric-value">{X_train_scaled.shape[0]} <span style="font-size: 1rem; color: #A0AEC0;">Rows</span></div>
+            </div>
+            """, unsafe_allow_html=True)
+        with colB:
+            st.markdown(f"""
+            <div class="custom-metric-card">
+                <div class="metric-title">Testing Matrix Size</div>
+                <div class="metric-value">{X_test_scaled.shape[0]} <span style="font-size: 1rem; color: #A0AEC0;">Rows</span></div>
+            </div>
+            """, unsafe_allow_html=True)
 
 # =====================================
 # TRAIN MODEL
@@ -297,7 +317,13 @@ elif menu == 'Train Your Model':
             with open('MainModel.pkl', 'wb') as file:
                 pickle.dump(model, file)
 
-            st.success(f'✅ {model_option.split("(")[0].strip()} trained and saved to disk!')
+            # Replacing default success with a custom status card
+            st.markdown(f"""
+            <div class="custom-metric-card" style="border-color: rgba(46, 204, 113, 0.4); background: linear-gradient(135deg, rgba(46, 204, 113, 0.1) 0%, transparent 100%);">
+                <div class="metric-title" style="color: #2ECC71;">Status: Online</div>
+                <div class="metric-value" style="font-size: 1.5rem;">✅ {model_option.split("(")[0].strip()} Deployed</div>
+            </div>
+            """, unsafe_allow_html=True)
 
 # =====================================
 # MODEL EVALUATION
@@ -361,7 +387,6 @@ elif menu == 'Model Evaluation':
         ax.set_xlabel("Actual Delivery Days")
         ax.set_ylabel("Predicted Delivery Days")
         
-        # Transparent background for charts to match dark mode better
         fig.patch.set_alpha(0.0)
         ax.patch.set_alpha(0.0)
         st.pyplot(fig)
