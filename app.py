@@ -127,11 +127,67 @@ if menu == 'Home':
     st.markdown("Predict delivery duration based on order information and historical logistics data.")
     st.markdown("<br>", unsafe_allow_html=True)
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric('Total Orders', f"{len(df):,}")
-    col2.metric('Average Delivery', f"{round(df[target].mean(), 1)} Days")
-    col3.metric('Max Delivery Time', f"{int(df[target].max())} Days")
+    # Injecting Custom HTML/CSS specifically for the Metric Cards
+    st.markdown("""
+    <style>
+    .custom-metric-card {
+        background: linear-gradient(135deg, rgba(28, 131, 225, 0.15) 0%, rgba(255, 255, 255, 0.02) 100%);
+        border: 1px solid rgba(28, 131, 225, 0.3);
+        padding: 1.5rem;
+        border-radius: 12px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        text-align: center;
+        transition: transform 0.2s ease;
+    }
+    .custom-metric-card:hover {
+        transform: translateY(-5px);
+        border: 1px solid rgba(28, 131, 225, 0.6);
+    }
+    .metric-title {
+        font-size: 1rem;
+        color: #A0AEC0; /* Light gray for dark mode readability */
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    .metric-value {
+        font-size: 2.2rem;
+        font-weight: 800;
+        color: #4299E1; /* Bright blue */
+        margin: 0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
+    # Render Custom Metric Cards
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown(f"""
+        <div class="custom-metric-card">
+            <div class="metric-title">Total Orders</div>
+            <div class="metric-value">{len(df):,}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    with col2:
+        st.markdown(f"""
+        <div class="custom-metric-card">
+            <div class="metric-title">Average Delivery</div>
+            <div class="metric-value">{round(df[target].mean(), 1)} Days</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    with col3:
+        st.markdown(f"""
+        <div class="custom-metric-card">
+            <div class="metric-title">Max Delivery Time</div>
+            <div class="metric-value">{int(df[target].max())} Days</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown("### 📋 Dataset Preview")
     st.dataframe(df.head(10), use_container_width=True)
 
