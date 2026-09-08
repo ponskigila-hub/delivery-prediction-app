@@ -1,8 +1,7 @@
 """
-📦 Delivery Time Prediction App
-A complete, dark-themed Streamlit application for predicting delivery durations.
-Inspired by bento-style UI/UX with custom CSS, interactive visualizations,
-and a full ML pipeline.
+Delivery Time Prediction — Manifest Terminal
+A Streamlit app for predicting parcel delivery durations, styled after a
+cargo waybill / customs manifest rather than a generic SaaS dashboard.
 """
 
 import streamlit as st
@@ -12,8 +11,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pickle
 import os
-import time
-from datetime import datetime
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
@@ -26,407 +23,376 @@ from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 # PAGE CONFIG — MUST BE FIRST STREAMLIT CALL
 # =============================================================================
 st.set_page_config(
-    page_title="📦 Delivery Time Predictor",
+    page_title="Delivery Manifest",
     page_icon="📦",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # =============================================================================
-# CUSTOM CSS — FULL DARK THEME WITH BENTO STYLE
+# DESIGN SYSTEM
+# -----------------------------------------------------------------------------
+# Subject: parcel logistics. The visual language borrows from air waybills,
+# customs declarations and warehouse manifests — hairline-ruled forms,
+# tracking-code monospace, a stamped "cleared" moment for the prediction
+# result — instead of glassy gradient cards.
+#
+# Color   ink #12141A (page), panel #191C24, paper #F2ECDD (manifest sheet),
+#         line #2B3040, accent #FF6A39 (stamp orange), accent-2 #E8C468
+#         (manifest tan), text #E7E4DA, text-dim #8992A3, ok #4FAE7C,
+#         warn #E2574C
+# Type    Oswald (condensed, stenciled) for headings/labels,
+#         IBM Plex Mono for tracking numbers, codes and metrics,
+#         Inter for body copy
+# Layout  hairline-ruled "form" sections, numbered manifest steps in the
+#         sidebar (the pipeline genuinely is sequential), a single bold
+#         moment: the prediction rendered as a torn-off shipping stub
 # =============================================================================
 MAIN_CSS = """
 <style>
-    /* ----- GLOBAL RESET & BASE ----- */
-    .main > div {
-        padding-top: 1.5rem;
-    }
-    .block-container {
-        padding-bottom: 3rem;
-        max-width: 1400px;
-    }
-    .stApp {
-        background: linear-gradient(145deg, #0d0d1a 0%, #1a1a2e 50%, #16213e 100%);
-    }
-    
-    /* ----- TYPOGRAPHY ----- */
-    h1, h2, h3, h4, h5, h6 {
-        color: #e8e8f0 !important;
-        font-weight: 700 !important;
-        letter-spacing: -0.02em;
-    }
-    p, li, label, .stMarkdown {
-        color: #b8b8d0 !important;
-    }
-    
-    /* ----- BENTO CARDS ----- */
-    .bento-card {
-        background: rgba(255, 255, 255, 0.04);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 16px;
-        padding: 1.5rem 1.25rem;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
-        height: 100%;
-        position: relative;
-        overflow: hidden;
-    }
-    .bento-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 2px;
-        background: linear-gradient(90deg, #4f8cf7, #7c5cfc, #4f8cf7);
-        background-size: 200% 100%;
-        animation: shimmer 3s ease-in-out infinite;
-        opacity: 0.6;
-    }
-    @keyframes shimmer {
-        0% { background-position: 200% 0; }
-        100% { background-position: -200% 0; }
-    }
-    .bento-card:hover {
-        transform: translateY(-4px);
-        border-color: rgba(79, 140, 247, 0.25);
-        box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
-    }
-    
-    /* ----- METRIC CARDS (inside bento) ----- */
-    .metric-value-lg {
-        font-size: 2.8rem;
-        font-weight: 800;
-        background: linear-gradient(135deg, #4f8cf7, #7c5cfc);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        line-height: 1.2;
-    }
-    .metric-value-lg .unit {
-        font-size: 1.2rem;
-        -webkit-text-fill-color: #8888bb;
-        background: none;
-    }
-    .metric-title {
-        font-size: 0.8rem;
-        text-transform: uppercase;
-        letter-spacing: 1.5px;
-        color: #8888bb;
-        font-weight: 600;
-        margin-bottom: 0.25rem;
-    }
-    .metric-sub {
-        font-size: 0.85rem;
-        color: #666699;
-        margin-top: 0.25rem;
-    }
-    
-    /* ----- PREDICTION RESULT CARD ----- */
-    .result-card {
-        background: linear-gradient(135deg, rgba(46, 204, 113, 0.12), rgba(39, 174, 96, 0.04));
-        border: 1px solid rgba(46, 204, 113, 0.3);
-        border-radius: 20px;
-        padding: 2.5rem 2rem;
-        text-align: center;
-        backdrop-filter: blur(12px);
-        box-shadow: 0 8px 40px rgba(46, 204, 113, 0.08);
-    }
-    .result-value {
-        font-size: 4.5rem;
-        font-weight: 900;
-        background: linear-gradient(135deg, #2ecc71, #27ae60);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        line-height: 1;
-    }
-    .result-label {
-        font-size: 1.1rem;
-        color: #8888bb;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-        margin-bottom: 0.5rem;
-    }
-    
-    /* ----- SIDEBAR ----- */
-    .css-1d391kg, .css-1aumxhk {
-        background: rgba(13, 13, 26, 0.92) !important;
-        backdrop-filter: blur(16px);
-        border-right: 1px solid rgba(255, 255, 255, 0.04);
-    }
-    .sidebar-brand {
-        text-align: center;
-        padding: 1rem 0 0.5rem 0;
-    }
-    .sidebar-brand h1 {
-        font-size: 1.6rem;
-        font-weight: 800;
-        background: linear-gradient(135deg, #4f8cf7, #7c5cfc);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        margin-bottom: 0;
-    }
-    .sidebar-brand p {
-        font-size: 0.75rem;
-        color: #666699;
-        letter-spacing: 2px;
-        text-transform: uppercase;
-        margin-top: 0;
-    }
-    .sidebar-divider {
-        border: none;
-        height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(79, 140, 247, 0.2), transparent);
-        margin: 1rem 0;
-    }
-    .sidebar-status {
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 10px;
-        padding: 0.75rem 1rem;
-        margin-top: 0.5rem;
-    }
-    .sidebar-status .label {
-        font-size: 0.65rem;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        color: #666699;
-    }
-    .sidebar-status .value {
-        font-size: 0.9rem;
-        color: #d0d0e8;
-        font-weight: 600;
-    }
-    .status-dot {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        margin-right: 6px;
-    }
-    .status-dot.online { background: #2ecc71; box-shadow: 0 0 12px rgba(46, 204, 113, 0.4); }
-    .status-dot.offline { background: #e74c3c; box-shadow: 0 0 12px rgba(231, 76, 60, 0.4); }
-    
-    /* ----- RADIO BUTTONS (sidebar nav) ----- */
-    .stRadio > div {
-        gap: 0.25rem;
-    }
-    .stRadio label {
-        padding: 0.6rem 1rem !important;
-        border-radius: 10px !important;
-        transition: all 0.2s ease;
-        font-weight: 500;
-        color: #8888bb !important;
-        background: transparent !important;
-    }
-    .stRadio label:hover {
-        background: rgba(79, 140, 247, 0.08) !important;
-        color: #d0d0e8 !important;
-    }
-    .stRadio label[data-selected="true"] {
-        background: rgba(79, 140, 247, 0.12) !important;
-        color: #4f8cf7 !important;
-        border: 1px solid rgba(79, 140, 247, 0.15);
-    }
-    
-    /* ----- BUTTONS ----- */
-    .stButton button {
-        background: linear-gradient(135deg, #4f8cf7, #7c5cfc) !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 10px !important;
-        padding: 0.6rem 1.5rem !important;
-        font-weight: 600 !important;
-        transition: all 0.3s ease !important;
-        box-shadow: 0 4px 16px rgba(79, 140, 247, 0.25) !important;
-        width: 100%;
-    }
-    .stButton button:hover {
-        transform: translateY(-2px) scale(1.01);
-        box-shadow: 0 8px 32px rgba(79, 140, 247, 0.35) !important;
-    }
-    .stButton button:active {
-        transform: scale(0.98);
-    }
-    
-    /* ----- FORMS ----- */
-    .stForm {
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 16px;
-        padding: 1.5rem;
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(8px);
-    }
-    
-    /* ----- DATAFRAMES ----- */
-    .dataframe-container {
-        background: rgba(255, 255, 255, 0.02);
-        border-radius: 12px;
-        padding: 0.75rem;
-        border: 1px solid rgba(255, 255, 255, 0.04);
-        overflow: hidden;
-    }
-    .stDataFrame {
-        border-radius: 8px !important;
-    }
-    
-    /* ----- TABS ----- */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 0.5rem;
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 12px;
-        padding: 0.25rem;
-    }
-    .stTabs [data-baseweb="tab"] {
-        border-radius: 8px !important;
-        padding: 0.5rem 1.25rem !important;
-        color: #8888bb !important;
-        font-weight: 500 !important;
-        transition: all 0.2s ease;
-    }
-    .stTabs [data-baseweb="tab"][aria-selected="true"] {
-        background: rgba(79, 140, 247, 0.12) !important;
-        color: #4f8cf7 !important;
-    }
-    .stTabs [data-baseweb="tab"]:hover {
-        background: rgba(255, 255, 255, 0.05) !important;
-        color: #d0d0e8 !important;
-    }
-    
-    /* ----- EXPANDER ----- */
-    .streamlit-expanderHeader {
-        background: rgba(255, 255, 255, 0.03) !important;
-        border-radius: 10px !important;
-        font-weight: 600 !important;
-        color: #b8b8d0 !important;
-    }
-    .streamlit-expanderContent {
-        background: rgba(255, 255, 255, 0.02) !important;
-        border-radius: 0 0 10px 10px !important;
-        padding: 1rem !important;
-    }
-    
-    /* ----- SELECTBOX, SLIDERS, INPUTS ----- */
-    .stSelectbox, .stNumberInput, .stSlider {
-        background: rgba(255, 255, 255, 0.03) !important;
-        border-radius: 10px !important;
-    }
-    .stSelectbox label, .stNumberInput label, .stSlider label {
-        color: #8888bb !important;
-        font-weight: 500 !important;
-    }
-    input, select, .stSlider > div {
-        color: #e8e8f0 !important;
-    }
-    
-    /* ----- SUCCESS / WARNING / ERROR ----- */
-    .stAlert {
-        border-radius: 12px !important;
-        backdrop-filter: blur(8px);
-        border: none !important;
-    }
-    .stAlert[data-baseweb="notification"] {
-        background: rgba(46, 204, 113, 0.08) !important;
-        border-left: 3px solid #2ecc71 !important;
-    }
-    .stAlert[data-baseweb="notification"]:has(.stAlertWarning) {
-        background: rgba(241, 196, 15, 0.08) !important;
-        border-left: 3px solid #f1c40f !important;
-    }
-    .stAlert[data-baseweb="notification"]:has(.stAlertError) {
-        background: rgba(231, 76, 60, 0.08) !important;
-        border-left: 3px solid #e74c3c !important;
-    }
-    
-    /* ----- BALLOONS (celebration) ----- */
-    .stBalloons {
-        z-index: 9999 !important;
-    }
-    
-    /* ----- HIDE DEFAULT ELEMENTS ----- */
-    #MainMenu { visibility: hidden; }
-    footer { visibility: hidden; }
-    header { background: transparent !important; }
-    
-    /* ----- SCROLLBAR ----- */
-    ::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
-    }
-    ::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.02);
-    }
-    ::-webkit-scrollbar-thumb {
-        background: rgba(79, 140, 247, 0.3);
-        border-radius: 10px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-        background: rgba(79, 140, 247, 0.5);
-    }
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+    --ink: #12141a;
+    --panel: #191c24;
+    --panel-2: #1f2330;
+    --paper: #f2ecdd;
+    --paper-dim: #d9d2bd;
+    --line: #2b3040;
+    --line-soft: #22262f;
+    --text: #e7e4da;
+    --text-dim: #8992a3;
+    --accent: #ff6a39;
+    --accent-soft: rgba(255, 106, 57, 0.14);
+    --tan: #e8c468;
+    --ok: #4fae7c;
+    --warn: #e2574c;
+}
+
+/* ----- BASE ----- */
+.stApp { background: var(--ink); }
+.main > div { padding-top: 1rem; }
+.block-container { padding-bottom: 3rem; max-width: 1320px; }
+
+h1, h2, h3, h4 {
+    font-family: 'Oswald', sans-serif;
+    color: var(--text) !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.01em;
+}
+p, li, label, .stMarkdown, span { font-family: 'Inter', sans-serif; color: var(--text-dim); }
+code, .stCode { font-family: 'IBM Plex Mono', monospace !important; }
+
+/* ----- WAYBILL HEADER STRIP ----- */
+.waybill-header {
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1.1rem 1.4rem;
+    margin-bottom: 1.6rem;
+    background:
+        repeating-linear-gradient(90deg, var(--panel) 0px, var(--panel) 3px, var(--panel-2) 3px, var(--panel-2) 5px) top / 100% 4px no-repeat,
+        var(--ink);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.waybill-header .wb-title {
+    font-family: 'Oswald', sans-serif;
+    font-size: 1.9rem;
+    font-weight: 700;
+    color: var(--text);
+}
+.waybill-header .wb-sub {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.92rem;
+    color: var(--text-dim);
+    margin-top: 0.2rem;
+}
+.waybill-header .wb-code {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+    align-self: flex-start;
+}
+
+/* ----- MANIFEST TAGS (metric cards) ----- */
+.tag-row { display: flex; gap: 0.85rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+.manifest-tag {
+    flex: 1 1 160px;
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    padding: 0.85rem 1rem 0.75rem 1rem;
+}
+.manifest-tag .tag-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+}
+.manifest-tag .tag-value {
+    font-family: 'Oswald', sans-serif;
+    font-size: 2rem;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.25;
+}
+.manifest-tag .tag-value .unit {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 400;
+    color: var(--text-dim);
+}
+.manifest-tag .tag-sub { font-family: 'IBM Plex Mono', monospace; font-size: 0.76rem; color: var(--text-dim); margin-top: 0.15rem; }
+
+/* ----- FORM SECTION (replaces bento cards) ----- */
+.form-section {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    padding: 1.3rem 1.4rem;
+}
+.form-section h4 { margin-top: 0; }
+
+/* ----- SIDEBAR AS MANIFEST LEDGER ----- */
+section[data-testid="stSidebar"] {
+    background: var(--panel) !important;
+    border-right: 1px solid var(--line);
+}
+.ledger-brand { padding: 1rem 0 0.4rem 0.1rem; border-bottom: 1px solid var(--line); margin-bottom: 0.6rem; }
+.ledger-brand .lb-mark { font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: var(--accent); letter-spacing: 0.1em; }
+.ledger-brand h1 { font-size: 1.35rem; margin: 0.15rem 0 0 0; }
+
+.stRadio [role="radiogroup"] { gap: 0.15rem; }
+.stRadio label {
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 0.86rem !important;
+    padding: 0.55rem 0.6rem !important;
+    border-left: 2px solid transparent;
+    color: var(--text-dim) !important;
+    background: transparent !important;
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+.stRadio label:hover { color: var(--text) !important; border-left-color: var(--line); }
+.stRadio label[data-selected="true"] {
+    color: var(--accent) !important;
+    border-left-color: var(--accent);
+    background: var(--accent-soft) !important;
+}
+
+.ledger-status {
+    border: 1px solid var(--line);
+    padding: 0.6rem 0.75rem;
+    margin-top: 0.6rem;
+    font-family: 'IBM Plex Mono', monospace;
+}
+.ledger-status .ls-label { font-size: 0.62rem; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; }
+.ledger-status .ls-value { font-size: 0.84rem; color: var(--text); margin-top: 0.1rem; }
+.stamp-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; }
+.stamp-dot.cleared { background: var(--ok); }
+.stamp-dot.void { background: var(--warn); }
+
+/* ----- BUTTONS ----- */
+.stButton button {
+    background: var(--accent) !important;
+    color: #16130f !important;
+    border: none !important;
+    border-radius: 2px !important;
+    font-family: 'Oswald', sans-serif !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.02em;
+    padding: 0.55rem 1.4rem !important;
+    box-shadow: none !important;
+    transition: filter 0.15s ease;
+}
+.stButton button:hover { filter: brightness(1.08); transform: none; }
+.stButton button:active { filter: brightness(0.94); }
+
+/* ----- FORMS ----- */
+div[data-testid="stForm"] {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 0;
+    padding: 1.3rem 1.4rem;
+}
+
+/* ----- TABLES ----- */
+.stDataFrame { border: 1px solid var(--line) !important; }
+
+/* ----- TABS ----- */
+.stTabs [data-baseweb="tab-list"] { gap: 0; border-bottom: 1px solid var(--line); background: transparent; }
+.stTabs [data-baseweb="tab"] {
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 0.82rem !important;
+    color: var(--text-dim) !important;
+    border-radius: 0 !important;
+    border-bottom: 2px solid transparent !important;
+}
+.stTabs [data-baseweb="tab"][aria-selected="true"] {
+    color: var(--accent) !important;
+    border-bottom: 2px solid var(--accent) !important;
+    background: transparent !important;
+}
+
+/* ----- EXPANDER ----- */
+.streamlit-expanderHeader {
+    background: var(--panel) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 0 !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 0.85rem !important;
+    color: var(--text-dim) !important;
+}
+.streamlit-expanderContent { background: var(--panel-2) !important; border: 1px solid var(--line) !important; border-top: none !important; }
+
+/* ----- INPUTS ----- */
+.stSelectbox label, .stNumberInput label, .stSlider label {
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 0.78rem !important;
+    color: var(--text-dim) !important;
+}
+
+/* ----- ALERTS ----- */
+.stAlert { border-radius: 0 !important; border: 1px solid var(--line) !important; }
+
+/* ----- THE STUB (prediction result — the one bold moment) ----- */
+.stub-wrap { display: flex; justify-content: center; margin: 0.5rem 0 1rem 0; }
+.stub {
+    background: var(--paper);
+    color: #1c1712;
+    width: 100%;
+    max-width: 560px;
+    position: relative;
+    padding: 2rem 2rem 1.6rem 2rem;
+    border-top: 1px dashed #b8ae90;
+}
+.stub::before {
+    content: '';
+    position: absolute;
+    top: -1px; left: 0; right: 0;
+    height: 0;
+    border-top: 3px dashed transparent;
+}
+.stub .stub-eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    color: #7a7157;
+    display: flex;
+    justify-content: space-between;
+}
+.stub .stub-days {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 4.2rem;
+    line-height: 1.05;
+    margin-top: 0.35rem;
+    color: #1c1712;
+}
+.stub .stub-days .unit { font-size: 1.6rem; font-weight: 500; color: #7a7157; }
+.stub .stub-ci { font-family: 'IBM Plex Mono', monospace; font-size: 0.82rem; color: #6a6248; margin-top: 0.2rem; }
+.stub .stub-stamp {
+    position: absolute;
+    top: 1.4rem; right: 1.8rem;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: 0.06em;
+    color: var(--ok);
+    border: 2px solid var(--ok);
+    padding: 0.15rem 0.6rem;
+    transform: rotate(6deg);
+    opacity: 0.85;
+}
+.stub .stub-fields {
+    margin-top: 1.1rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid #cfc6a8;
+    display: flex;
+    gap: 1.6rem;
+    flex-wrap: wrap;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+}
+.stub .stub-fields div span { display: block; }
+.stub .stub-fields .f-label { color: #8a8163; font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.stub .stub-fields .f-value { color: #1c1712; font-weight: 600; margin-top: 0.1rem; }
+
+/* ----- MISC ----- */
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }
+header { background: transparent !important; }
+hr.rule { border: none; border-top: 1px solid var(--line); margin: 1.6rem 0; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--ink); }
+::-webkit-scrollbar-thumb { background: var(--line); }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 </style>
 """
 st.markdown(MAIN_CSS, unsafe_allow_html=True)
 
 # =============================================================================
-# MATPLOTLIB DARK THEME
+# MATPLOTLIB THEME (matches the manifest palette)
 # =============================================================================
 plt.rcParams.update({
-    "axes.facecolor": "#111128",
-    "figure.facecolor": "#111128",
-    "axes.edgecolor": "#2a2a5a",
-    "axes.labelcolor": "#8888bb",
-    "xtick.color": "#7878aa",
-    "ytick.color": "#7878aa",
-    "text.color": "#ccccee",
-    "grid.color": "#1e1e3f",
-    "grid.alpha": 0.4,
-    "legend.facecolor": "#111128",
-    "legend.edgecolor": "#2a2a5a",
+    "axes.facecolor": "#191c24",
+    "figure.facecolor": "#191c24",
+    "axes.edgecolor": "#2b3040",
+    "axes.labelcolor": "#8992a3",
+    "xtick.color": "#8992a3",
+    "ytick.color": "#8992a3",
+    "text.color": "#e7e4da",
+    "grid.color": "#22262f",
+    "grid.alpha": 0.6,
+    "legend.facecolor": "#191c24",
+    "legend.edgecolor": "#2b3040",
+    "font.family": "monospace",
 })
 sns.set_style("darkgrid")
+ACCENT = "#ff6a39"
+ACCENT_2 = "#e8c468"
+OK = "#4fae7c"
+WARN = "#e2574c"
 
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
-def bento_card(content, key=None):
-    """Render content inside a bento-style card."""
-    st.markdown(f'<div class="bento-card" key="{key}">{content}</div>', unsafe_allow_html=True)
+def waybill_header(title, subtitle, code):
+    st.markdown(f"""
+    <div class="waybill-header">
+        <div>
+            <div class="wb-title">{title}</div>
+            <div class="wb-sub">{subtitle}</div>
+        </div>
+        <div class="wb-code">{code}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-def render_metric(title, value, unit="", sub=""):
-    """Render a metric inside a bento card with gradient text."""
-    unit_html = f'<span class="unit">{unit}</span>' if unit else ""
-    sub_html = f'<div class="metric-sub">{sub}</div>' if sub else ""
-    html = f"""
-    <div class="bento-card">
-        <div class="metric-title">{title}</div>
-        <div class="metric-value-lg">{value} {unit_html}</div>
+def render_tag(label, value, unit="", sub=""):
+    unit_html = f'<span class="unit"> {unit}</span>' if unit else ""
+    sub_html = f'<div class="tag-sub">{sub}</div>' if sub else ""
+    return f"""
+    <div class="manifest-tag">
+        <div class="tag-label">{label}</div>
+        <div class="tag-value">{value}{unit_html}</div>
         {sub_html}
     </div>
     """
+
+def render_tag_row(tags):
+    html = '<div class="tag-row">' + "".join(render_tag(**t) for t in tags) + "</div>"
     st.markdown(html, unsafe_allow_html=True)
 
-def render_metric_row(metrics):
-    """Render a row of metrics (list of dicts: title, value, unit, sub)."""
-    cols = st.columns(len(metrics))
-    for col, m in zip(cols, metrics):
-        with col:
-            render_metric(**m)
+def section_title(title):
+    st.markdown(f'<h4 style="margin: 1.4rem 0 0.6rem 0;">{title}</h4>', unsafe_allow_html=True)
 
-def render_section_header(title, subtitle=""):
-    """Render a section header with optional subtitle."""
-    html = f"""
-    <div style="margin-bottom: 1.5rem;">
-        <h1 style="font-size: 2.2rem; font-weight: 800; background: linear-gradient(135deg, #e8e8f0, #8888bb); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 0.25rem;">{title}</h1>
-        {f'<p style="color: #666699; font-size: 1rem; margin-top: 0;">{subtitle}</p>' if subtitle else ''}
-    </div>
-    """
-    st.markdown(html, unsafe_allow_html=True)
-
-def render_subheader(title):
-    st.markdown(f'<h3 style="color: #c8c8e0; font-weight: 600; margin: 1.5rem 0 0.75rem 0;">{title}</h3>', unsafe_allow_html=True)
+def rule():
+    st.markdown('<hr class="rule">', unsafe_allow_html=True)
 
 # =============================================================================
 # DATA LOADING & PREPROCESSING (CACHED)
@@ -437,7 +403,6 @@ def load_data():
     try:
         df = pd.read_csv("olist_orders_dataset.csv")
     except FileNotFoundError:
-        # Generate synthetic data for demo
         np.random.seed(42)
         n = 500
         dates = pd.date_range(start="2023-01-01", periods=n)
@@ -453,31 +418,28 @@ def preprocess_data(df):
     """Clean and engineer features."""
     df = df.copy()
     df = df.dropna(subset=["order_delivered_customer_date", "order_estimated_delivery_date"])
-    
+
     for col in ["order_purchase_timestamp", "order_delivered_customer_date", "order_estimated_delivery_date"]:
         df[col] = pd.to_datetime(df[col], errors="coerce")
     df = df.dropna(subset=["order_purchase_timestamp", "order_delivered_customer_date", "order_estimated_delivery_date"])
-    
+
     df["purchase_hour"] = df["order_purchase_timestamp"].dt.hour
     df["purchase_day"] = df["order_purchase_timestamp"].dt.day
     df["purchase_month"] = df["order_purchase_timestamp"].dt.month
     df["purchase_weekday"] = df["order_purchase_timestamp"].dt.weekday
-    
+
     df["delivery_days"] = (df["order_delivered_customer_date"] - df["order_purchase_timestamp"]).dt.days
     df["estimated_days"] = (df["order_estimated_delivery_date"] - df["order_purchase_timestamp"]).dt.days
-    
-    # Cap outliers
+
     df["delivery_days"] = df["delivery_days"].clip(lower=0, upper=60)
     df["estimated_days"] = df["estimated_days"].clip(lower=1, upper=60)
-    
+
     return df
 
-# Load and preprocess
-with st.spinner("Loading data..."):
+with st.spinner("Loading manifest data..."):
     raw_df = load_data()
     df = preprocess_data(raw_df)
 
-# Feature definitions
 FEATURES = ["purchase_hour", "purchase_day", "purchase_month", "purchase_weekday", "estimated_days"]
 TARGET = "delivery_days"
 
@@ -489,180 +451,167 @@ for key in ["model", "scaler", "model_name", "trained", "metrics"]:
         st.session_state[key] = None
 
 # =============================================================================
-# SIDEBAR
+# SIDEBAR — MANIFEST LEDGER (numbered because the pipeline is a real sequence)
 # =============================================================================
+STEPS = [
+    ("01", "Home"),
+    ("02", "EDA"),
+    ("03", "Preprocessing"),
+    ("04", "Train model"),
+    ("05", "Evaluation"),
+    ("06", "Predict"),
+]
+
 with st.sidebar:
     st.markdown("""
-    <div class="sidebar-brand">
-        <h1>📦</h1>
-        <p>Delivery Time<br>Predictor</p>
+    <div class="ledger-brand">
+        <div class="lb-mark">NO. 2941-DX &middot; CARGO MANIFEST</div>
+        <h1>Delivery Terminal</h1>
     </div>
     """, unsafe_allow_html=True)
-    
-    st.markdown('<hr class="sidebar-divider">', unsafe_allow_html=True)
-    
-    page = st.radio(
+
+    page_label = st.radio(
         "Navigation",
-        ["🏠 Home", "📊 EDA", "⚙️ Preprocessing", "🧠 Train Model", "📈 Evaluation", "🎯 Predict"],
+        [f"{num} — {name}" for num, name in STEPS],
         label_visibility="collapsed",
     )
-    
-    st.markdown('<hr class="sidebar-divider">', unsafe_allow_html=True)
-    
-    # Dataset status
-    st.markdown("""
-    <div class="sidebar-status">
-        <div class="label">📊 Dataset</div>
-        <div class="value">{:,} rows · {} features</div>
-    </div>
-    """.format(len(df), len(FEATURES)), unsafe_allow_html=True)
-    
-    # Model status
+    page = page_label.split("— ")[1]
+
     if st.session_state.trained:
-        status_color = "#2ecc71"
-        status_text = "Online"
-        model_name = st.session_state.model_name or "Model"
+        model_dot, model_state, model_name = "cleared", "Trained", (st.session_state.model_name or "Model")
     else:
-        status_color = "#e74c3c"
-        status_text = "Offline"
-        model_name = "Not trained"
-    
+        model_dot, model_state, model_name = "void", "Not trained", "—"
+
     st.markdown(f"""
-    <div class="sidebar-status">
-        <div class="label">🧠 Model</div>
-        <div class="value"><span class="status-dot {status_text.lower()}"></span>{model_name} · {status_text}</div>
+    <div class="ledger-status">
+        <div class="ls-label">Dataset</div>
+        <div class="ls-value">{len(df):,} rows &middot; {len(FEATURES)} fields</div>
+    </div>
+    <div class="ledger-status">
+        <div class="ls-label">Model</div>
+        <div class="ls-value"><span class="stamp-dot {model_dot}"></span>{model_name} &middot; {model_state}</div>
     </div>
     """, unsafe_allow_html=True)
-    
-    st.markdown('<hr class="sidebar-divider">', unsafe_allow_html=True)
-    
-    st.caption("⚡ Built with Streamlit · v2.0")
 
 # =============================================================================
 # PAGE ROUTING
 # =============================================================================
 
 # ---- HOME ----
-if page == "🏠 Home":
-    render_section_header("📦 Delivery Time Prediction", "Predict delivery duration using machine learning")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        render_metric("Total Orders", f"{len(df):,}")
-    with col2:
-        render_metric("Avg Delivery", f"{df[TARGET].mean():.1f}", "days")
-    with col3:
-        render_metric("Max Delivery", f"{int(df[TARGET].max())}", "days")
-    with col4:
-        render_metric("Std Dev", f"{df[TARGET].std():.1f}", "days")
-    
-    st.markdown("---")
-    
+if page == "Home":
+    waybill_header("Delivery Time Prediction", "Predict parcel delivery duration from purchase and carrier data", "REF / DTP-001")
+
+    render_tag_row([
+        {"label": "Total orders", "value": f"{len(df):,}"},
+        {"label": "Avg delivery", "value": f"{df[TARGET].mean():.1f}", "unit": "days"},
+        {"label": "Max delivery", "value": f"{int(df[TARGET].max())}", "unit": "days"},
+        {"label": "Std dev", "value": f"{df[TARGET].std():.1f}", "unit": "days"},
+    ])
+
+    rule()
+
     col_left, col_right = st.columns([2, 1])
     with col_left:
-        render_subheader("📋 Data Preview")
-        st.markdown('<div class="dataframe-container">', unsafe_allow_html=True)
+        section_title("Data preview")
         st.dataframe(df.head(8), use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    
+
     with col_right:
-        render_subheader("📈 Quick Stats")
+        section_title("Quick stats")
         st.markdown(f"""
-        <div class="bento-card">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                <div><span style="color: #666699;">Min</span><br><span style="color: #e8e8f0; font-weight: 600;">{int(df[TARGET].min())} days</span></div>
-                <div><span style="color: #666699;">Max</span><br><span style="color: #e8e8f0; font-weight: 600;">{int(df[TARGET].max())} days</span></div>
-                <div><span style="color: #666699;">Median</span><br><span style="color: #e8e8f0; font-weight: 600;">{int(df[TARGET].median())} days</span></div>
-                <div><span style="color: #666699;">Q1–Q3</span><br><span style="color: #e8e8f0; font-weight: 600;">{int(df[TARGET].quantile(0.25))} – {int(df[TARGET].quantile(0.75))} days</span></div>
+        <div class="form-section">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; font-family: 'IBM Plex Mono', monospace;">
+                <div><span style="color: var(--text-dim); font-size: 0.72rem;">MIN</span><br><span style="color: var(--text); font-weight: 600;">{int(df[TARGET].min())} days</span></div>
+                <div><span style="color: var(--text-dim); font-size: 0.72rem;">MAX</span><br><span style="color: var(--text); font-weight: 600;">{int(df[TARGET].max())} days</span></div>
+                <div><span style="color: var(--text-dim); font-size: 0.72rem;">MEDIAN</span><br><span style="color: var(--text); font-weight: 600;">{int(df[TARGET].median())} days</span></div>
+                <div><span style="color: var(--text-dim); font-size: 0.72rem;">Q1–Q3</span><br><span style="color: var(--text); font-weight: 600;">{int(df[TARGET].quantile(0.25))}–{int(df[TARGET].quantile(0.75))} days</span></div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
 # ---- EDA ----
-elif page == "📊 EDA":
-    render_section_header("🔍 Exploratory Data Analysis", "Understand your delivery data")
-    
-    # Quick metrics
-    render_metric_row([
-        {"title": "Total Orders", "value": f"{len(df):,}"},
-        {"title": "Features", "value": len(FEATURES)},
-        {"title": "Avg Delivery", "value": f"{df[TARGET].mean():.1f}", "unit": "days"},
-        {"title": "Missing Values", "value": f"{df.isnull().sum().sum():,}"},
+elif page == "EDA":
+    waybill_header("Exploratory Data Analysis", "Distributions, correlations and dataset profile", "REF / DTP-002")
+
+    render_tag_row([
+        {"label": "Total orders", "value": f"{len(df):,}"},
+        {"label": "Features", "value": len(FEATURES)},
+        {"label": "Avg delivery", "value": f"{df[TARGET].mean():.1f}", "unit": "days"},
+        {"label": "Missing values", "value": f"{df.isnull().sum().sum():,}"},
     ])
-    
-    tab1, tab2, tab3 = st.tabs(["📊 Distributions", "📈 Correlations", "📋 Profile"])
-    
+
+    tab1, tab2, tab3 = st.tabs(["Distributions", "Correlations", "Profile"])
+
     with tab1:
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown("#### Delivery Days Distribution")
+            section_title("Delivery days distribution")
             fig, ax = plt.subplots(figsize=(6, 4))
-            sns.histplot(df[TARGET], kde=True, color="#4f8cf7", ax=ax, bins=30)
-            ax.set_xlabel("Delivery Days")
+            sns.histplot(df[TARGET], kde=True, color=ACCENT, ax=ax, bins=30)
+            ax.set_xlabel("Delivery days")
             ax.set_ylabel("Frequency")
             st.pyplot(fig)
             plt.close()
-        
+
         with col2:
             feat = st.selectbox("Select feature", FEATURES)
-            st.markdown(f"#### {feat} Distribution")
+            section_title(f"{feat} distribution")
             fig, ax = plt.subplots(figsize=(6, 4))
-            sns.histplot(df[feat], kde=True, color="#7c5cfc", ax=ax, bins=20)
+            sns.histplot(df[feat], kde=True, color=ACCENT_2, ax=ax, bins=20)
             ax.set_xlabel(feat)
             ax.set_ylabel("Frequency")
             st.pyplot(fig)
             plt.close()
-        
-        st.markdown("#### Boxplots")
+
+        section_title("Boxplots")
         cols = st.columns(3)
         for i, feat in enumerate(FEATURES[:3]):
             with cols[i]:
                 fig, ax = plt.subplots(figsize=(4, 3))
-                sns.boxplot(y=df[feat], color="#4f8cf7", ax=ax)
+                sns.boxplot(y=df[feat], color=ACCENT, ax=ax)
                 ax.set_ylabel(feat)
                 st.pyplot(fig)
                 plt.close()
-    
+
     with tab2:
-        st.markdown("#### Feature Correlation Matrix")
+        section_title("Feature correlation matrix")
         corr_df = df[FEATURES + [TARGET]].corr()
         fig, ax = plt.subplots(figsize=(8, 6))
-        sns.heatmap(corr_df, annot=True, cmap="coolwarm", center=0, fmt=".2f", 
+        sns.heatmap(corr_df, annot=True, cmap="RdGy_r", center=0, fmt=".2f",
                     linewidths=0.5, ax=ax, cbar_kws={"shrink": 0.8})
         st.pyplot(fig)
         plt.close()
-        
-        st.markdown("#### Top Correlations with Target")
+
+        section_title("Top correlations with target")
         corr_with_target = corr_df[TARGET].drop(TARGET).sort_values(key=abs, ascending=False)
         fig, ax = plt.subplots(figsize=(6, 3))
-        colors = ["#2ecc71" if c > 0 else "#e74c3c" for c in corr_with_target.values]
+        colors = [OK if c > 0 else WARN for c in corr_with_target.values]
         ax.barh(corr_with_target.index, corr_with_target.values, color=colors)
-        ax.set_xlabel("Correlation with Delivery Days")
-        ax.axvline(0, color="#666699", linestyle="--", alpha=0.5)
+        ax.set_xlabel("Correlation with delivery days")
+        ax.axvline(0, color="#8992a3", linestyle="--", alpha=0.5)
         st.pyplot(fig)
         plt.close()
-    
+
     with tab3:
-        st.markdown("#### Data Types")
+        section_title("Data types")
         st.dataframe(df.dtypes.astype(str), use_container_width=True)
-        st.markdown("#### Statistical Summary")
+        section_title("Statistical summary")
         st.dataframe(df.describe(), use_container_width=True)
 
 # ---- PREPROCESSING ----
-elif page == "⚙️ Preprocessing":
-    render_section_header("⚙️ Data Preprocessing", "Configure and run your preprocessing pipeline")
-    
+elif page == "Preprocessing":
+    waybill_header("Data Preprocessing", "Configure and run the preprocessing pipeline", "REF / DTP-003")
+
     with st.form("preprocessing_form"):
         col1, col2, col3 = st.columns(3)
         with col1:
-            test_size = st.slider("Test Set Size", 0.1, 0.4, 0.2, 0.05, format="%.2f")
+            test_size = st.slider("Test set size", 0.1, 0.4, 0.2, 0.05, format="%.2f")
         with col2:
-            random_state = st.number_input("Random Seed", 1, 999, 42)
+            random_state = st.number_input("Random seed", 1, 999, 42)
         with col3:
             scaler_option = st.selectbox("Scaler", ["StandardScaler", "MinMaxScaler"])
-        
-        submitted = st.form_submit_button("🚀 Run Preprocessing", use_container_width=True)
-    
+
+        submitted = st.form_submit_button("Run preprocessing", use_container_width=True)
+
     if submitted:
         with st.spinner("Preprocessing data..."):
             X = df[FEATURES]
@@ -670,36 +619,31 @@ elif page == "⚙️ Preprocessing":
             X_train, X_test, y_train, y_test = train_test_split(
                 X, y, test_size=test_size, random_state=random_state
             )
-            
+
             scaler = StandardScaler() if scaler_option == "StandardScaler" else MinMaxScaler()
             X_train_scaled = scaler.fit_transform(X_train)
             X_test_scaled = scaler.transform(X_test)
-            
-            # Save scaler
+
             with open("scaler.pkl", "wb") as f:
                 pickle.dump(scaler, f)
-            
-            st.success("✅ Preprocessing complete! Scaler saved as `scaler.pkl`")
-            
-            render_metric_row([
-                {"title": "Training Set", "value": X_train_scaled.shape[0], "unit": "rows"},
-                {"title": "Test Set", "value": X_test_scaled.shape[0], "unit": "rows"},
-                {"title": "Features", "value": X_train_scaled.shape[1], "unit": "columns"},
-                {"title": "Scaler", "value": scaler_option, "sub": "saved to disk"},
+
+            st.success(f"Preprocessing complete — scaler saved as scaler.pkl ({scaler_option})")
+
+            render_tag_row([
+                {"label": "Training set", "value": X_train_scaled.shape[0], "unit": "rows"},
+                {"label": "Test set", "value": X_test_scaled.shape[0], "unit": "rows"},
+                {"label": "Features", "value": X_train_scaled.shape[1], "unit": "cols"},
+                {"label": "Scaler", "value": scaler_option},
             ])
-            
-            # Show sample of scaled data
-            with st.expander("🔍 Preview Scaled Data"):
-                preview_df = pd.DataFrame(
-                    X_train_scaled[:5],
-                    columns=FEATURES
-                )
+
+            with st.expander("Preview scaled data"):
+                preview_df = pd.DataFrame(X_train_scaled[:5], columns=FEATURES)
                 st.dataframe(preview_df, use_container_width=True)
 
 # ---- TRAIN MODEL ----
-elif page == "🧠 Train Model":
-    render_section_header("🧠 Model Training", "Train a regression model on your preprocessed data")
-    
+elif page == "Train model":
+    waybill_header("Model Training", "Fit a regression model on the preprocessed data", "REF / DTP-004")
+
     model_options = {
         "Linear Regression": LinearRegression(),
         "Random Forest (50 trees)": RandomForestRegressor(n_estimators=50, random_state=42),
@@ -707,24 +651,24 @@ elif page == "🧠 Train Model":
         "SVR (RBF)": SVR(kernel="rbf"),
         "SVR (Linear)": SVR(kernel="linear"),
     }
-    
-    selected_model = st.selectbox("Select Algorithm", list(model_options.keys()))
-    
+
+    selected_model = st.selectbox("Select algorithm", list(model_options.keys()))
+
     col1, col2 = st.columns(2)
     with col1:
-        train_btn = st.button("🚀 Train Model", use_container_width=True, type="primary")
+        train_btn = st.button("Train model", use_container_width=True, type="primary")
     with col2:
-        if st.button("🗑️ Clear Model", use_container_width=True):
+        if st.button("Clear model", use_container_width=True):
             st.session_state.model = None
             st.session_state.scaler = None
             st.session_state.model_name = None
             st.session_state.trained = False
             st.session_state.metrics = None
             st.rerun()
-    
+
     if train_btn:
         if not os.path.exists("scaler.pkl"):
-            st.error("⚠️ Please run Preprocessing first to generate `scaler.pkl`")
+            st.error("Run Preprocessing first to generate scaler.pkl")
         else:
             with st.spinner(f"Training {selected_model}..."):
                 X = df[FEATURES]
@@ -732,56 +676,54 @@ elif page == "🧠 Train Model":
                 X_train, X_test, y_train, y_test = train_test_split(
                     X, y, test_size=0.2, random_state=42
                 )
-                
+
                 with open("scaler.pkl", "rb") as f:
                     scaler = pickle.load(f)
-                
+
                 X_train_scaled = scaler.transform(X_train)
                 X_test_scaled = scaler.transform(X_test)
-                
+
                 model = model_options[selected_model]
                 model.fit(X_train_scaled, y_train)
-                
-                # Evaluate
+
                 y_pred = model.predict(X_test_scaled)
                 metrics = {
-                    "R²": r2_score(y_test, y_pred),
+                    "R2": r2_score(y_test, y_pred),
                     "MAE": mean_absolute_error(y_test, y_pred),
                     "MSE": mean_squared_error(y_test, y_pred),
                     "RMSE": np.sqrt(mean_squared_error(y_test, y_pred)),
                 }
-                
-                # Save
+
                 with open("MainModel.pkl", "wb") as f:
                     pickle.dump(model, f)
-                
+
                 st.session_state.model = model
                 st.session_state.scaler = scaler
                 st.session_state.model_name = selected_model
                 st.session_state.trained = True
                 st.session_state.metrics = metrics
-                
-                st.success(f"✅ {selected_model} trained successfully!")
-                
-                render_metric_row([
-                    {"title": "R² Score", "value": f"{metrics['R²']:.4f}"},
-                    {"title": "MAE", "value": f"{metrics['MAE']:.3f}", "unit": "days"},
-                    {"title": "RMSE", "value": f"{metrics['RMSE']:.3f}", "unit": "days"},
+
+                st.success(f"{selected_model} trained")
+
+                render_tag_row([
+                    {"label": "R2 score", "value": f"{metrics['R2']:.4f}"},
+                    {"label": "MAE", "value": f"{metrics['MAE']:.3f}", "unit": "days"},
+                    {"label": "RMSE", "value": f"{metrics['RMSE']:.3f}", "unit": "days"},
                 ])
-                
-                with st.expander("📊 Model Details"):
+
+                with st.expander("Model details"):
                     if hasattr(model, "get_params"):
                         st.json(model.get_params())
                     st.write("Model type:", type(model).__name__)
 
 # ---- EVALUATION ----
-elif page == "📈 Evaluation":
-    render_section_header("📈 Model Evaluation", "Assess your model's performance")
-    
+elif page == "Evaluation":
+    waybill_header("Model Evaluation", "Assess model performance on the held-out test set", "REF / DTP-005")
+
     if st.session_state.trained and st.session_state.model is not None:
         model = st.session_state.model
         scaler = st.session_state.scaler
-        
+
         X = df[FEATURES]
         y = df[TARGET]
         X_train, X_test, y_train, y_test = train_test_split(
@@ -789,80 +731,79 @@ elif page == "📈 Evaluation":
         )
         X_test_scaled = scaler.transform(X_test)
         y_pred = model.predict(X_test_scaled)
-        
-        # Metrics
+
         metrics = {
-            "R²": r2_score(y_test, y_pred),
+            "R2": r2_score(y_test, y_pred),
             "MAE": mean_absolute_error(y_test, y_pred),
             "MSE": mean_squared_error(y_test, y_pred),
             "RMSE": np.sqrt(mean_squared_error(y_test, y_pred)),
         }
-        
-        render_metric_row([
-            {"title": "R² Score", "value": f"{metrics['R²']:.4f}"},
-            {"title": "MAE", "value": f"{metrics['MAE']:.3f}", "unit": "days"},
-            {"title": "MSE", "value": f"{metrics['MSE']:.3f}", "unit": "days²"},
-            {"title": "RMSE", "value": f"{metrics['RMSE']:.3f}", "unit": "days"},
+
+        render_tag_row([
+            {"label": "R2 score", "value": f"{metrics['R2']:.4f}"},
+            {"label": "MAE", "value": f"{metrics['MAE']:.3f}", "unit": "days"},
+            {"label": "MSE", "value": f"{metrics['MSE']:.3f}", "unit": "days sq."},
+            {"label": "RMSE", "value": f"{metrics['RMSE']:.3f}", "unit": "days"},
         ])
-        
-        st.markdown("---")
-        
+
+        rule()
+
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown("#### Actual vs Predicted")
+            section_title("Actual vs predicted")
             fig, ax = plt.subplots(figsize=(6, 5))
-            sns.scatterplot(x=y_test, y=y_pred, alpha=0.5, color="#4f8cf7", ax=ax)
+            sns.scatterplot(x=y_test, y=y_pred, alpha=0.5, color=ACCENT, ax=ax)
             min_val = min(y_test.min(), y_pred.min())
             max_val = max(y_test.max(), y_pred.max())
-            ax.plot([min_val, max_val], [min_val, max_val], "r--", lw=2, alpha=0.6)
-            ax.set_xlabel("Actual Delivery Days")
-            ax.set_ylabel("Predicted Delivery Days")
+            ax.plot([min_val, max_val], [min_val, max_val], color="#8992a3", linestyle="--", lw=1.5, alpha=0.8)
+            ax.set_xlabel("Actual delivery days")
+            ax.set_ylabel("Predicted delivery days")
             st.pyplot(fig)
             plt.close()
-        
+
         with col2:
-            st.markdown("#### Residuals Distribution")
+            section_title("Residuals distribution")
             residuals = y_test - y_pred
             fig, ax = plt.subplots(figsize=(6, 5))
-            sns.histplot(residuals, kde=True, color="#7c5cfc", ax=ax, bins=25)
-            ax.axvline(0, color="red", linestyle="--", alpha=0.6)
-            ax.set_xlabel("Residual (Actual - Predicted)")
+            sns.histplot(residuals, kde=True, color=ACCENT_2, ax=ax, bins=25)
+            ax.axvline(0, color=WARN, linestyle="--", alpha=0.7)
+            ax.set_xlabel("Residual (actual - predicted)")
             ax.set_ylabel("Frequency")
             st.pyplot(fig)
             plt.close()
-        
-        with st.expander("📋 Full Metrics Table"):
+
+        with st.expander("Full metrics table"):
             st.dataframe(pd.DataFrame([metrics]).T.rename(columns={0: "Value"}), use_container_width=True)
-    
+
     else:
-        st.warning("⚠️ No trained model found. Please go to **Train Model** and train a model first.")
+        st.warning("No trained model on file. Go to Train model and fit one first.")
 
 # ---- PREDICT ----
-else:  # "🎯 Predict"
-    render_section_header("🎯 Make a Prediction", "Enter order details to estimate delivery time")
-    
+else:  # "Predict"
+    waybill_header("Make a Prediction", "Enter order details to estimate delivery time", "REF / DTP-006")
+
     with st.form("prediction_form"):
         col1, col2 = st.columns(2)
         with col1:
-            purchase_hour = st.slider("Purchase Hour (0–23)", 0, 23, 12)
-            purchase_day = st.number_input("Purchase Day (1–31)", 1, 31, 15)
-            purchase_weekday = st.selectbox("Purchase Weekday", ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], index=2)
+            purchase_hour = st.slider("Purchase hour (0–23)", 0, 23, 12)
+            purchase_day = st.number_input("Purchase day (1–31)", 1, 31, 15)
+            purchase_weekday = st.selectbox("Purchase weekday", ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], index=2)
             weekday_map = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4, "Sat": 5, "Sun": 6}
             purchase_weekday_val = weekday_map[purchase_weekday]
-        
+
         with col2:
-            purchase_month = st.selectbox("Purchase Month", list(range(1, 13)), index=5)
-            estimated_days = st.number_input("Carrier Estimated Days", 1, 60, 10)
-        
-        submitted = st.form_submit_button("🔮 Predict Delivery Time", use_container_width=True, type="primary")
-    
+            purchase_month = st.selectbox("Purchase month", list(range(1, 13)), index=5)
+            estimated_days = st.number_input("Carrier estimated days", 1, 60, 10)
+
+        submitted = st.form_submit_button("Predict delivery time", use_container_width=True, type="primary")
+
     if submitted:
         if not st.session_state.trained or st.session_state.model is None:
-            st.error("⚠️ No trained model found. Please train a model first.")
+            st.error("No trained model on file. Train a model first.")
         else:
             model = st.session_state.model
             scaler = st.session_state.scaler
-            
+
             input_data = np.array([[
                 purchase_hour,
                 purchase_day,
@@ -870,13 +811,11 @@ else:  # "🎯 Predict"
                 purchase_weekday_val,
                 estimated_days
             ]])
-            
+
             input_scaled = scaler.transform(input_data)
             prediction = model.predict(input_scaled)[0]
-            prediction = max(0, prediction)  # No negative days
-            
-            # Confidence interval approximation (using training residuals)
-            # Simple: ±1.96 * RMSE if available
+            prediction = max(0, prediction)
+
             if st.session_state.metrics and "RMSE" in st.session_state.metrics:
                 rmse = st.session_state.metrics["RMSE"]
                 ci_lower = max(0, prediction - 1.96 * rmse)
@@ -884,33 +823,27 @@ else:  # "🎯 Predict"
             else:
                 ci_lower = max(0, prediction - 3)
                 ci_upper = prediction + 3
-            
-            # Display result
+
             st.markdown(f"""
-            <div class="result-card">
-                <div class="result-label">📦 Estimated Delivery Time</div>
-                <div class="result-value">{prediction:.1f} <span style="font-size: 1.8rem; -webkit-text-fill-color: #8888bb;">days</span></div>
-                <div style="margin-top: 0.75rem; color: #666699; font-size: 0.9rem;">
-                    95% CI: {ci_lower:.1f} – {ci_upper:.1f} days
-                </div>
-                <div style="margin-top: 0.5rem; display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
-                    <span style="background: rgba(79,140,247,0.1); padding: 0.25rem 1rem; border-radius: 20px; color: #8888bb; font-size: 0.8rem;">
-                        🕐 {purchase_hour}:00
-                    </span>
-                    <span style="background: rgba(79,140,247,0.1); padding: 0.25rem 1rem; border-radius: 20px; color: #8888bb; font-size: 0.8rem;">
-                        📅 {purchase_day}/{purchase_month}
-                    </span>
-                    <span style="background: rgba(79,140,247,0.1); padding: 0.25rem 1rem; border-radius: 20px; color: #8888bb; font-size: 0.8rem;">
-                        🚚 {estimated_days} days estimated
-                    </span>
+            <div class="stub-wrap">
+                <div class="stub">
+                    <div class="stub-eyebrow">
+                        <span>ESTIMATED TRANSIT TIME</span>
+                        <span>{purchase_day:02d}/{purchase_month:02d}, {purchase_hour:02d}:00</span>
+                    </div>
+                    <div class="stub-stamp">CLEARED</div>
+                    <div class="stub-days">{prediction:.1f}<span class="unit"> days</span></div>
+                    <div class="stub-ci">95% CI &nbsp;{ci_lower:.1f}–{ci_upper:.1f} days</div>
+                    <div class="stub-fields">
+                        <div><span class="f-label">Weekday</span><span class="f-value">{purchase_weekday}</span></div>
+                        <div><span class="f-label">Carrier est.</span><span class="f-value">{estimated_days} days</span></div>
+                        <div><span class="f-label">Model</span><span class="f-value">{st.session_state.model_name}</span></div>
+                    </div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
-            
-            st.balloons()
-            
-            # Show input summary
-            with st.expander("📋 Input Summary"):
+
+            with st.expander("Input summary"):
                 st.json({
                     "purchase_hour": purchase_hour,
                     "purchase_day": purchase_day,
@@ -921,12 +854,12 @@ else:  # "🎯 Predict"
                 })
 
 # =============================================================================
-# FOOTER (visible on all pages)
+# FOOTER
 # =============================================================================
 st.markdown("""
-<div style="text-align: center; padding: 2rem 0 0.5rem 0; border-top: 1px solid rgba(255,255,255,0.03); margin-top: 2rem;">
-    <span style="color: #444466; font-size: 0.75rem;">
-        📦 Delivery Time Predictor · Built with Streamlit
+<div style="text-align: center; padding: 2rem 0 0.5rem 0; border-top: 1px solid var(--line); margin-top: 2rem;">
+    <span style="font-family: 'IBM Plex Mono', monospace; color: #545a68; font-size: 0.72rem; letter-spacing: 0.04em;">
+        DELIVERY MANIFEST TERMINAL — BUILT WITH STREAMLIT
     </span>
 </div>
 """, unsafe_allow_html=True)
