@@ -362,8 +362,19 @@ WARN = "#e2574c"
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
+import re
+
+def _h(html):
+    """Flatten a multi-line HTML snippet to one line before handing it to
+    st.markdown. Streamlit runs markdown content through Python-Markdown
+    first — indented lines that follow a blank line get parsed as a code
+    block and print as literal text instead of rendering, which is why
+    multi-line, indented f-string HTML can silently break. Collapsing all
+    whitespace between tags sidesteps that entirely."""
+    return re.sub(r">\s+<", "><", html.strip())
+
 def waybill_header(title, subtitle, code):
-    st.markdown(f"""
+    st.markdown(_h(f"""
     <div class="waybill-header">
         <div>
             <div class="wb-title">{title}</div>
@@ -371,7 +382,7 @@ def waybill_header(title, subtitle, code):
         </div>
         <div class="wb-code">{code}</div>
     </div>
-    """, unsafe_allow_html=True)
+    """), unsafe_allow_html=True)
 
 def render_tag(label, value, unit="", sub=""):
     unit_html = f'<span class="unit"> {unit}</span>' if unit else ""
@@ -386,7 +397,7 @@ def render_tag(label, value, unit="", sub=""):
 
 def render_tag_row(tags):
     html = '<div class="tag-row">' + "".join(render_tag(**t) for t in tags) + "</div>"
-    st.markdown(html, unsafe_allow_html=True)
+    st.markdown(_h(html), unsafe_allow_html=True)
 
 def section_title(title):
     st.markdown(f'<h4 style="margin: 1.4rem 0 0.6rem 0;">{title}</h4>', unsafe_allow_html=True)
@@ -463,12 +474,12 @@ STEPS = [
 ]
 
 with st.sidebar:
-    st.markdown("""
+    st.markdown(_h("""
     <div class="ledger-brand">
         <div class="lb-mark">NO. 2941-DX &middot; CARGO MANIFEST</div>
         <h1>Delivery Terminal</h1>
     </div>
-    """, unsafe_allow_html=True)
+    """), unsafe_allow_html=True)
 
     page_label = st.radio(
         "Navigation",
@@ -482,7 +493,7 @@ with st.sidebar:
     else:
         model_dot, model_state, model_name = "void", "Not trained", "—"
 
-    st.markdown(f"""
+    st.markdown(_h(f"""
     <div class="ledger-status">
         <div class="ls-label">Dataset</div>
         <div class="ls-value">{len(df):,} rows &middot; {len(FEATURES)} fields</div>
@@ -491,7 +502,7 @@ with st.sidebar:
         <div class="ls-label">Model</div>
         <div class="ls-value"><span class="stamp-dot {model_dot}"></span>{model_name} &middot; {model_state}</div>
     </div>
-    """, unsafe_allow_html=True)
+    """), unsafe_allow_html=True)
 
 # =============================================================================
 # PAGE ROUTING
@@ -517,7 +528,7 @@ if page == "Home":
 
     with col_right:
         section_title("Quick stats")
-        st.markdown(f"""
+        st.markdown(_h(f"""
         <div class="form-section">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; font-family: 'IBM Plex Mono', monospace;">
                 <div><span style="color: var(--text-dim); font-size: 0.72rem;">MIN</span><br><span style="color: var(--text); font-weight: 600;">{int(df[TARGET].min())} days</span></div>
@@ -526,7 +537,7 @@ if page == "Home":
                 <div><span style="color: var(--text-dim); font-size: 0.72rem;">Q1–Q3</span><br><span style="color: var(--text); font-weight: 600;">{int(df[TARGET].quantile(0.25))}–{int(df[TARGET].quantile(0.75))} days</span></div>
             </div>
         </div>
-        """, unsafe_allow_html=True)
+        """), unsafe_allow_html=True)
 
 # ---- EDA ----
 elif page == "EDA":
@@ -824,7 +835,7 @@ else:  # "Predict"
                 ci_lower = max(0, prediction - 3)
                 ci_upper = prediction + 3
 
-            st.markdown(f"""
+            st.markdown(_h(f"""
             <div class="stub-wrap">
                 <div class="stub">
                     <div class="stub-eyebrow">
@@ -833,7 +844,7 @@ else:  # "Predict"
                     </div>
                     <div class="stub-stamp">CLEARED</div>
                     <div class="stub-days">{prediction:.1f}<span class="unit"> days</span></div>
-                    <div class="stub-ci">95% CI &nbsp;{ci_lower:.1f}–{ci_upper:.1f} days</div>
+                    <div class="stub-ci">95% CI &nbsp;{ci_lower:.1f}\u2013{ci_upper:.1f} days</div>
                     <div class="stub-fields">
                         <div><span class="f-label">Weekday</span><span class="f-value">{purchase_weekday}</span></div>
                         <div><span class="f-label">Carrier est.</span><span class="f-value">{estimated_days} days</span></div>
@@ -841,7 +852,7 @@ else:  # "Predict"
                     </div>
                 </div>
             </div>
-            """, unsafe_allow_html=True)
+            """), unsafe_allow_html=True)
 
             with st.expander("Input summary"):
                 st.json({
@@ -856,10 +867,10 @@ else:  # "Predict"
 # =============================================================================
 # FOOTER
 # =============================================================================
-st.markdown("""
+st.markdown(_h("""
 <div style="text-align: center; padding: 2rem 0 0.5rem 0; border-top: 1px solid var(--line); margin-top: 2rem;">
     <span style="font-family: 'IBM Plex Mono', monospace; color: #545a68; font-size: 0.72rem; letter-spacing: 0.04em;">
         DELIVERY MANIFEST TERMINAL — BUILT WITH STREAMLIT
     </span>
 </div>
-""", unsafe_allow_html=True)
+"""), unsafe_allow_html=True)
